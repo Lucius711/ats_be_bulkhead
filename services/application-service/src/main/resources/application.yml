@@ -1,0 +1,50 @@
+server:
+  port: 8083
+
+spring:
+  application:
+    name: application-service
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ats_application_dbs
+    username: dieunt
+    password:
+    driver-class-name: org.postgresql.Driver
+
+    hikari:
+      pool-name: ApplicationHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+    # ============================================================
+    # JPA / HIBERNATE
+    # ============================================================
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    open-in-view: false
+job-service:
+  url: http://localhost:8081
+
+candidate-service:
+  url: http://localhost:8082
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/ # Địa chỉ Eureka Server
+    fetch-registry: true # Tải registry về local cache
+    register-with-eureka: true # Đăng ký bản thân vào registry
+  instance:
+    prefer-ip-address: true # Dùng IP thay hostname - quan trọng trong Docker
+    lease-renewal-interval-in-seconds: 10 # Heartbeat mỗi 10s (dev)
+    lease-expiration-duration-in-seconds: 30 # Expiry sau 30s không có heartbeat

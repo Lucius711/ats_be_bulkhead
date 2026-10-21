@@ -1,0 +1,1063 @@
+html
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1" name="viewport"/>
+<title>Bảo mật Microservice: từ tổng quan đến đăng nhập React SPA (PKCE và BFF)</title>
+<style>
+:root{
+  --bg:#f4f6fa;--panel:#ffffff;--ink:#18212f;--muted:#566377;--line:#d9e0ea;
+  --spa:#2457d6;--spa-bg:#e4ecff;
+  --as:#6a43c4;--as-bg:#ece5fb;
+  --gw:#0b7f82;--gw-bg:#dcf3f3;
+  --svc:#4b5565;--svc-bg:#e8ebf0;
+  --secret:#8a5a00;--secret-bg:#fff0c9;
+  --bad:#b83232;--bad-bg:#fde7e7;
+  --ok:#17794f;--ok-bg:#dff4ea;
+  --code-bg:#101a2b;--code-fg:#e4ebf6;--code-dim:#8fa1bd;
+  --serif:Charter,"Bitstream Charter","Sitka Text",Cambria,Georgia,serif;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Consolas,"Liberation Mono",monospace;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --bg:#0d1420;--panel:#141d2d;--ink:#e5ebf4;--muted:#9eacc0;--line:#26344a;
+    --spa:#8aa9ff;--spa-bg:#1b2a52;
+    --as:#b4a0ff;--as-bg:#2a2250;
+    --gw:#4cc9cb;--gw-bg:#123a3d;
+    --svc:#b3bccb;--svc-bg:#242e3f;
+    --secret:#f3c35e;--secret-bg:#3a2d0e;
+    --bad:#ff8f8f;--bad-bg:#3b1a1d;
+    --ok:#5fd3a0;--ok-bg:#12372a;
+    --code-bg:#0a1019;
+  }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:16px}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 var(--sans)}
+a{color:var(--spa)}
+a:focus-visible,button:focus-visible,input:focus-visible,summary:focus-visible,select:focus-visible{outline:3px solid var(--spa);outline-offset:2px;border-radius:4px}
+abbr[title]{text-decoration:underline dotted;text-underline-offset:3px;cursor:help}
+
+.shell{display:grid;grid-template-columns:260px minmax(0,1fr);gap:0;max-width:1240px;margin:0 auto}
+nav.toc{position:sticky;top:0;align-self:start;height:100vh;overflow:auto;padding:28px 18px 28px 24px;border-right:1px solid var(--line);font-size:14.5px}
+nav.toc .brand{font:700 17px/1.3 var(--serif);margin:0 0 14px}
+nav.toc ol{list-style:none;margin:0;padding:0}
+nav.toc li{margin:0}
+nav.toc a{display:block;padding:5px 8px;border-radius:6px;color:var(--muted);text-decoration:none}
+nav.toc a:hover{background:var(--panel);color:var(--ink)}
+nav.toc .grp{margin:14px 8px 4px;font-size:12.5px;color:var(--muted);font-weight:600}
+main{padding:44px 40px 90px;max-width:900px}
+header.hero{margin-bottom:40px}
+header.hero h1{font:700 clamp(30px,4.4vw,46px)/1.15 var(--serif);margin:0 0 14px;letter-spacing:-.01em}
+header.hero p{font-size:18px;color:var(--muted);max-width:62ch;margin:0}
+section{margin-top:56px}
+h2{font:700 30px/1.25 var(--serif);margin:0 0 14px;padding-top:6px}
+h3{font:700 21px/1.3 var(--serif);margin:34px 0 8px}
+h4{font:700 16px/1.4 var(--sans);margin:22px 0 4px}
+p,li{max-width:74ch}
+ul,ol{padding-left:22px}
+li{margin:4px 0}
+code{font:0.9em var(--mono);background:var(--svc-bg);padding:1px 6px;border-radius:5px}
+pre{background:var(--code-bg);color:var(--code-fg);padding:16px 18px;border-radius:10px;overflow:auto;font:13.5px/1.6 var(--mono);margin:14px 0;position:relative}
+pre code{background:none;padding:0;font:inherit;color:inherit}
+pre .c{color:var(--code-dim)}
+pre[data-name]::before{content:attr(data-name);display:block;color:var(--code-dim);font-size:12px;margin-bottom:8px;border-bottom:1px solid #26344a;padding-bottom:6px}
+table{border-collapse:collapse;width:100%;margin:16px 0;font-size:15px;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+th,td{text-align:left;padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+th{background:var(--svc-bg);font-weight:600}
+tr:last-child td{border-bottom:none}
+.scroll{overflow-x:auto}
+.callout{border-left:5px solid var(--spa);background:var(--panel);padding:12px 16px;margin:18px 0;border-radius:0 8px 8px 0;border-top:1px solid var(--line);border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+.callout>:first-child{margin-top:0}.callout>:last-child{margin-bottom:0}
+.callout.warn{border-left-color:var(--secret)}
+.callout.bad{border-left-color:var(--bad)}
+.callout.ok{border-left-color:var(--ok)}
+.callout .t{font-weight:700;display:block;margin-bottom:2px}
+
+.chip{display:inline-block;padding:1px 9px;border-radius:999px;font-size:13.5px;font-weight:600;white-space:nowrap}
+.chip.spa{background:var(--spa-bg);color:var(--spa)}
+.chip.as{background:var(--as-bg);color:var(--as)}
+.chip.gw{background:var(--gw-bg);color:var(--gw)}
+.chip.svc{background:var(--svc-bg);color:var(--svc)}
+.chip.secret{background:var(--secret-bg);color:var(--secret)}
+
+ol.flow{list-style:none;counter-reset:s;padding:0;margin:18px 0}
+ol.flow>li{counter-increment:s;position:relative;padding:10px 14px 10px 52px;margin:8px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;max-width:none}
+ol.flow>li::before{content:counter(s);position:absolute;left:14px;top:10px;width:26px;height:26px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-size:13px;font-weight:700}
+ol.flow p{margin:4px 0 0;font-size:15px;color:var(--muted);max-width:none}
+ol.flow code{font-size:.86em}
+
+.layers{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin:20px 0}
+.layers .box{flex:1 1 140px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+.layers .box b{display:block;font-size:15px;margin-bottom:2px}
+.layers .hop{flex:0 0 auto;align-self:center;color:var(--muted);font-size:20px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px;margin:18px 0}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+.card h4{margin-top:0}
+.card.a{border-top:4px solid var(--spa)}
+.card.b{border-top:4px solid var(--gw)}
+.pro{color:var(--ok)}.con{color:var(--bad)}
+
+/* PKCE lab */
+.lab{background:var(--panel);border:2px solid var(--secret);border-radius:14px;padding:20px 22px;margin:22px 0}
+.lab h3{margin-top:0}
+.lab .row{margin:14px 0;padding-top:14px;border-top:1px dashed var(--line)}
+.lab .row:first-of-type{border-top:none;padding-top:0}
+button.btn{font:600 15px var(--sans);padding:8px 16px;border-radius:8px;border:1px solid var(--ink);background:var(--ink);color:var(--bg);cursor:pointer}
+button.btn:disabled{opacity:.4;cursor:not-allowed}
+button.btn.ghost{background:transparent;color:var(--ink)}
+.out{font:13.5px/1.55 var(--mono);background:var(--code-bg);color:var(--code-fg);padding:10px 12px;border-radius:8px;margin-top:8px;word-break:break-all;min-height:2.4em}
+.out .v{color:#ffd37a}.out .h{color:#8fd6ff}.out .p{color:#c9b8ff}
+.out:empty::before{content:"(chưa có dữ liệu)";color:var(--code-dim)}
+.lab label{display:block;margin:4px 0;font-size:15px}
+.lab input[type=text]{width:100%;font:14px var(--mono);padding:8px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+.result{margin-top:10px;padding:10px 14px;border-radius:8px;font-weight:600}
+.result.ok{background:var(--ok-bg);color:var(--ok)}
+.result.bad{background:var(--bad-bg);color:var(--bad)}
+.result small{display:block;font-weight:400;color:var(--ink);margin-top:4px}
+details{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:10px 0}
+summary{cursor:pointer;font-weight:600}
+details[open] summary{margin-bottom:6px}
+footer{margin-top:70px;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+
+@media (max-width:960px){
+  .shell{grid-template-columns:1fr}
+  nav.toc{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  nav.toc ol{columns:2}
+  main{padding:28px 18px 70px}
+}
+@media (max-width:520px){nav.toc ol{columns:1}}
+
+/* ===== Editorial layer: giáo trình kỹ thuật ===== */
+:root{
+  --bg:#f7f8fa;--panel:#fff;--ink:#172033;--muted:#596579;--line:#d8dee8;
+  --accent:#1f5fbf;--accent-soft:#eaf1fb;--accent-2:#356c5a;
+  --warn:#8a5a00;--warn-bg:#fff6dc;--bad:#a33a3a;--bad-bg:#fff0f0;
+  --ok:#176b4b;--ok-bg:#e8f5ee;--code-bg:#101826;--code-fg:#e9eef6;--code-dim:#9aabc3;
+  --serif:Charter,"Bitstream Charter","Sitka Text",Cambria,Georgia,serif;
+  --sans:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  --mono:ui-monospace,"SF Mono",Consolas,"Liberation Mono",monospace;
+}
+body{font-size:16px;line-height:1.72}
+.shell{max-width:1380px;grid-template-columns:285px minmax(0,1fr)}
+nav.toc{padding:30px 18px 30px 26px;background:color-mix(in srgb,var(--panel) 78%,transparent)}
+nav.toc .brand{font-size:18px}
+nav.toc .grp{margin-top:18px;text-transform:uppercase;letter-spacing:.06em}
+main{max-width:980px;padding:52px 56px 100px}
+header.hero{padding-bottom:28px;border-bottom:1px solid var(--line);margin-bottom:46px}
+header.hero h1{font-size:clamp(34px,4.2vw,52px);letter-spacing:-.025em}
+header.hero p{font-size:19px;line-height:1.65}
+section{margin-top:68px}
+h2{font-size:32px;letter-spacing:-.012em}
+h3{font-size:22px;margin-top:38px}
+h4{font-size:16px}
+p,li{max-width:78ch}
+.lead{font-size:18px;color:var(--muted);max-width:78ch}
+.chapter-note{border-left:3px solid var(--accent);padding:9px 16px;background:var(--accent-soft);margin:18px 0 24px}
+.chapter-note strong{display:block;margin-bottom:2px}
+.learning-goals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin:24px 0 10px}
+.learning-goal{background:var(--panel);border:1px solid var(--line);padding:16px 17px;border-radius:10px}
+.learning-goal b{display:block;margin-bottom:5px}
+.figure{margin:26px 0 30px;padding:18px 18px 12px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+.figure svg{display:block;width:100%;height:auto}
+.figure figcaption{margin-top:10px;color:var(--muted);font-size:14px;line-height:1.55}
+.figure .caption-title{font-weight:700;color:var(--ink)}
+.diagram-label{font:600 14px var(--sans);fill:var(--ink)}
+.diagram-sub{font:12px var(--sans);fill:var(--muted)}
+.diagram-line{stroke:var(--muted);stroke-width:1.7;fill:none;marker-end:url(#arrow)}
+.role{display:inline-block;font:700 11px/1.2 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid currentColor;margin-right:4px}
+.chip{display:inline;color:inherit;background:none!important;padding:0;border-radius:0;font:inherit;font-weight:650}
+.layers{display:none}
+.cards{gap:16px}
+.card{padding:17px 18px}
+.card.a,.card.b{border-top-width:3px}
+.callout{box-shadow:none}
+.callout .t{font-size:15px}
+.flow>li{box-shadow:0 1px 2px rgba(20,35,55,.04)}
+pre{border:1px solid #26344a;box-shadow:0 2px 7px rgba(0,0,0,.06)}
+table{font-size:14.5px}
+th{white-space:nowrap}
+.key-point{margin:22px 0;padding:15px 17px;border:1px solid var(--line);background:var(--panel);border-radius:10px}
+.key-point b{display:block;margin-bottom:4px}
+.decision{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:20px 0}
+.decision>div{border:1px solid var(--line);border-radius:10px;padding:16px;background:var(--panel)}
+.decision h4{margin:0 0 7px}
+.small-note{font-size:14px;color:var(--muted)}
+.appendix{border-top:2px solid var(--line);padding-top:30px}
+@media (max-width:960px){
+  .shell{grid-template-columns:1fr}
+  nav.toc{position:static;height:auto;border-right:none;border-bottom:1px solid var(--line)}
+  nav.toc ol{columns:2}
+  main{padding:34px 24px 80px}
+  .learning-goals{grid-template-columns:1fr}
+}
+@media (max-width:640px){
+  main{padding:28px 18px 70px}
+  nav.toc ol{columns:1}
+  .decision{grid-template-columns:1fr}
+}
+@media print{
+  nav.toc{display:none} .shell{display:block;max-width:none} main{max-width:none;padding:0}
+  .figure{break-inside:avoid}.callout,pre,table{break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="shell">
+<nav aria-label="Mục lục" class="toc">
+<p class="brand">Bảo mật Microservice</p>
+<ol>
+
+<li class="grp">Tổng quan</li>
+<li><a href="#overview">1. Bài toán bảo mật</a></li>
+<li><a href="#approaches">2. Mô hình bảo mật và các hướng tiếp cận</a></li>
+<li class="grp">Nền tảng</li>
+<li><a href="#oauth">3. OAuth 2.0 và OIDC</a></li>
+<li><a href="#pkce">4. PKCE: cơ chế bảo vệ Authorization Code</a></li>
+<li class="grp">Hai cách đăng nhập SPA</li>
+<li><a href="#approach-a">5. Cách A: SPA là public client</a></li>
+<li><a href="#approach-b">6. Cách B: BFF</a></li>
+<li><a href="#compare">7. So sánh và chọn</a></li>
+<li class="grp">Thực hành</li>
+<li><a href="#demo-prep">8. Chuẩn bị môi trường thực hành</a></li>
+<li><a href="#demo-a">9. Demo cách A</a></li>
+<li><a href="#demo-b">10. Demo cách B</a></li>
+<li><a href="#errors">11. Chẩn đoán sự cố thường gặp</a></li>
+<li><a href="#exercises">12. Bài tập</a></li>
+<li><a href="#refs">Tài liệu tham khảo</a></li>
+<li><a href="#glossary">Phụ lục A — Bảng viết tắt</a></li></ol>
+</nav>
+<main>
+<header class="hero">
+<h1>Bảo mật Microservice và đăng nhập cho React SPA</h1>
+<p>Giáo trình nền tảng về bảo mật trong hệ thống microservice, tập trung vào OAuth 2.0, OpenID Connect, PKCE và hai mô hình tích hợp React SPA: public client và Backend For Frontend (BFF).</p>
+</header>
+<div aria-label="Mục tiêu học tập" class="learning-goals">
+<div class="learning-goal"><b>01 · Nhận diện</b>Phân biệt Authentication, Authorization, bảo vệ đường truyền và các vai trò trong kiến trúc OAuth 2.0/OIDC.</div>
+<div class="learning-goal"><b>02 · Giải thích</b>Trình bày được Authorization Code Flow, PKCE, JWT/JWKS và lý do Resource Server có thể xác thực token cục bộ.</div>
+<div class="learning-goal"><b>03 · Thiết kế</b>Đánh giá SPA public client và BFF theo vị trí lưu token, XSS, CSRF, CORS, khả năng scale và yêu cầu vận hành.</div>
+</div>
+<div class="chapter-note"><strong>Phạm vi của giáo trình</strong>Nội dung tập trung vào xác thực người dùng và bảo vệ API trong kiến trúc microservice. Các cơ chế service-to-service được trình bày ở mức kiến trúc để đặt đúng bối cảnh cho hai mô hình đăng nhập của SPA.</div>
+
+<section id="overview">
+<h2>1. Bảo mật trong kiến trúc Microservice</h2><figure class="figure"><div class="caption-title">Hình 1. Bảo mật của kiến trúc microservice</div><svg aria-label="Kiến trúc bảo mật microservice từ trình duyệt đến service và dữ liệu" role="img" viewbox="0 0 920 230"><defs><marker id="arrow" markerheight="8" markerwidth="8" orient="auto" refx="7" refy="3.5"><path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"></path></marker></defs>
+<rect fill="var(--accent-soft)" height="90" rx="10" stroke="var(--accent)" width="170" x="20" y="72"></rect><text class="diagram-label" text-anchor="middle" x="105" y="105">Client / Browser</text><text class="diagram-sub" text-anchor="middle" x="105" y="130">AuthN, token, cookie</text>
+<path class="diagram-line" d="M190 117 H270"></path>
+<rect fill="var(--accent-soft)" height="90" rx="10" stroke="var(--accent)" width="180" x="270" y="72"></rect><text class="diagram-label" text-anchor="middle" x="360" y="105">API Gateway</text><text class="diagram-sub" text-anchor="middle" x="360" y="130">AuthN · routing · policy</text>
+<path class="diagram-line" d="M450 117 H530"></path>
+<rect fill="var(--panel)" height="90" rx="10" stroke="var(--line)" width="170" x="530" y="72"></rect><text class="diagram-label" text-anchor="middle" x="615" y="105">Microservice</text><text class="diagram-sub" text-anchor="middle" x="615" y="130">Resource Server · AuthZ</text>
+<path class="diagram-line" d="M700 117 H780"></path>
+<rect fill="var(--panel)" height="90" rx="10" stroke="var(--line)" width="120" x="780" y="72"></rect><text class="diagram-label" text-anchor="middle" x="840" y="105">Data</text><text class="diagram-sub" text-anchor="middle" x="840" y="130">Owned access</text>
+<text class="diagram-sub" text-anchor="middle" x="460" y="35">Mỗi biên giao tiếp là một điểm cần xác thực và bảo vệ</text></svg><figcaption>Mỗi ranh giới giao tiếp cần được xem xét độc lập về xác thực, phân quyền và bảo vệ đường truyền.</figcaption></figure>
+<p>Trong mô hình monolith (ứng dụng nguyên khối), phạm vi bảo vệ thường tập trung quanh một điểm vào chính. Với microservice, mỗi service là một chương trình riêng, nói chuyện với nhau qua mạng. Khi số lượng service tăng, số điểm giao tiếp qua mạng cũng tăng theo; mỗi điểm giao tiếp trở thành một bề mặt cần được xác thực, phân quyền và bảo vệ đường truyền.</p>
+<div aria-label="Luồng request từ trình duyệt qua gateway đến service và cơ sở dữ liệu" class="layers" role="img">
+<div class="box"><span class="chip spa">Trình duyệt</span><b>Danh tính của tác nhân được xác định như thế nào?</b>Mật khẩu, token, cookie có thể bị đánh cắp (XSS, CSRF).</div>
+<div class="hop">→</div>
+<div class="box"><span class="chip gw">API Gateway</span><b>Điểm kiểm soát và định tuyến</b>Xác thực, giới hạn tốc độ, định tuyến.</div>
+<div class="hop">→</div>
+<div class="box"><span class="chip svc">Service nội bộ</span><b>Gọi nhau qua mạng</b>Service A có đúng là A không? Request có bị sửa không?</div>
+<div class="hop">→</div>
+<div class="box"><span class="chip svc">Dữ liệu</span><b>Bảo vệ dữ liệu</b>Chỉ đúng service sở hữu mới được truy cập.</div>
+</div>
+<p>Một thiết kế bảo mật cần trả lời ba câu hỏi cốt lõi:</p>
+<ol>
+<li><b>Xác thực (<abbr title="Authentication">AuthN</abbr>)</b>: người hoặc service đang gọi là ai?</li>
+<li><b>Phân quyền (<abbr title="Authorization">AuthZ</abbr>)</b>: danh tính đó được phép làm gì?</li>
+<li><b>Bảo vệ đường truyền và dữ liệu</b>: nội dung có bị đọc hoặc sửa giữa chừng không? (mã hóa bằng <abbr title="Transport Layer Security">TLS</abbr>)</li>
+</ol>
+<div class="callout">
+<span class="t">Hai loại tác nhân cần phân biệt</span>
+<p>Người dùng cuối (có trình duyệt, đăng nhập bằng mật khẩu) và service gọi service (máy với máy, không có người). Hai loại này dùng cơ chế khác nhau, và câu hỏi "SPA đăng nhập kiểu A hay B" chỉ nói về loại thứ nhất.</p>
+</div>
+</section>
+<section id="approaches">
+<h2>2. Mô hình bảo mật và các hướng tiếp cận</h2>
+<p>Không có một mô hình duy nhất phù hợp cho mọi hệ thống. Trong thực tế, các cơ chế thường được kết hợp thành nhiều lớp bảo vệ. Bảng sau liệt kê các hướng chính theo thứ tự tiến hóa.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Hướng</th><th>Ý tưởng</th><th>Ưu điểm</th><th>Hạn chế</th></tr></thead>
+<tbody>
+<tr><td><b>1. Mỗi service tự đăng nhập</b> (session riêng)</td><td>Mỗi service có form login và bảng user riêng.</td><td>Đơn giản ở quy mô nhỏ.</td><td>Người dùng đăng nhập nhiều lần, trùng lặp mã, khó đồng bộ. Hầu như không dùng cho microservice.</td></tr>
+<tr><td><b>2. Bảo vệ vành đai</b> (perimeter)</td><td>Chỉ Gateway kiểm tra đăng nhập; service bên trong tin mọi request đến từ Gateway.</td><td>Dễ làm, service không cần code bảo mật.</td><td>"Vỏ cứng, ruột mềm": ai lọt vào mạng nội bộ là gọi được mọi service.</td></tr>
+<tr><td><b>3. Token và Resource Server ở mọi service</b></td><td>Dùng OAuth 2.0/OIDC. Đăng nhập tại Authorization Server, nhận JWT; <b>mỗi service</b> tự kiểm tra JWT.</td><td>Tư duy zero-trust ("không tin mặc định"), stateless, dễ scale.</td><td>Phải quản lý vòng đời token, thu hồi khó hơn.</td></tr>
+<tr><td><b>4. Service gọi service bằng token</b></td><td>Chuyển tiếp token người dùng (<i>token relay</i>) hoặc dùng token riêng của service (<i>client credentials</i>), hoặc đổi token (<i>token exchange</i>).</td><td>Giữ được ngữ cảnh "ai là người dùng gốc".</td><td>Cần thiết kế scope/audience cẩn thận.</td></tr>
+<tr><td><b>5. mTLS / service mesh</b></td><td>Service chứng minh danh tính bằng chứng chỉ; mesh (Istio, Linkerd) tự lo.</td><td>Mã hóa và xác thực service-to-service mà không sửa code.</td><td>Vận hành phức tạp, cần hạ tầng (Kubernetes).</td></tr>
+<tr><td><b>6. API key</b></td><td>Một chuỗi bí mật gắn với đối tác/ứng dụng.</td><td>Rất đơn giản cho tích hợp máy với máy.</td><td>Không đại diện cho người dùng, khó giới hạn quyền và thu hồi tinh.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Với ứng dụng có giao diện web, thực tế hay gặp tổ hợp: <b>hướng 3 + 4</b> cho tầng API, thêm <b>hướng 5</b> khi hạ tầng đủ trưởng thành. Còn câu hỏi "trình duyệt đăng nhập thế nào và token nằm ở đâu" thu gọn thành hai kiến trúc:</p>
+<div class="cards">
+<div class="card a">
+<h4>Cách A: SPA là public client</h4>
+<p>Trình duyệt tự chạy Authorization Code + PKCE, <b>giữ token</b> trong JavaScript và gửi <code>Authorization: Bearer ...</code> tới Gateway. Gateway là Resource Server, không giữ phiên.</p>
+</div>
+<div class="card b">
+<h4>Cách B: BFF</h4>
+<p>Gateway đóng vai BFF: tự đăng nhập với Authorization Server, <b>giữ token phía server</b>. Trình duyệt chỉ có cookie phiên. Gateway gắn token khi chuyển request xuống service.</p>
+</div>
+</div>
+</section>
+<section id="oauth">
+<h2>3. OAuth 2.0 và OpenID Connect: nền tảng khái niệm</h2>
+<h3>3.1 Roles</h3>
+<div class="scroll">
+<table>
+<thead><tr><th>Vai trò</th><th>Là ai trong demo</th><th>Việc làm</th></tr></thead>
+<tbody>
+<tr><td>Resource Owner (chủ tài nguyên)</td><td>Người dùng <code>alice</code></td><td>Chủ dữ liệu, đồng ý cho ứng dụng truy cập.</td></tr>
+<tr><td>Client (ứng dụng khách)</td><td>React SPA (cách A) hoặc Gateway (cách B)</td><td>Ứng dụng muốn truy cập dữ liệu thay người dùng.</td></tr>
+<tr><td>Authorization Server (AS)</td><td>Keycloak (hoặc Spring Authorization Server)</td><td>Xác thực người dùng, cấp token.</td></tr>
+<tr><td>Resource Server (RS)</td><td>Gateway và Product Service</td><td>Kiểm tra token rồi trả dữ liệu.</td></tr>
+</tbody>
+</table>
+</div>
+<h3>3.2 Public client và confidential client</h3>
+<p>Đây là khái niệm nền tảng để xác định mô hình tích hợp phù hợp cho SPA.</p>
+<ul>
+<li><b>Confidential client (client bí mật)</b>: chạy ở nơi giấu được bí mật, ví dụ server. Có <code>client_secret</code> để chứng minh danh tính với AS. Gateway trong cách B là confidential client.</li>
+<li><b>Public client (client công khai)</b>: chạy ở nơi ai cũng đọc được mã, như trình duyệt hoặc app di động. <b>Không thể giấu secret</b> (mở DevTools là thấy). SPA trong cách A là public client, nên không có <code>client_secret</code>, và PKCE ra đời để bù vào chỗ thiếu này.</li>
+</ul>
+<h3>3.3 Các loại token</h3>
+<div class="scroll">
+<table>
+<thead><tr><th>Token</th><th>Mục đích</th><th>Gửi tới ai</th><th>Sống bao lâu</th></tr></thead>
+<tbody>
+<tr><td>Access token</td><td>"Vé vào cổng" để gọi API.</td><td>Resource Server</td><td>Ngắn (vài phút đến 1 giờ).</td></tr>
+<tr><td>ID token (OIDC)</td><td>Cho Client biết người dùng là ai.</td><td>Chỉ Client đọc, không gửi cho API.</td><td>Ngắn.</td></tr>
+<tr><td>Refresh token</td><td>Đổi lấy access token mới mà không bắt đăng nhập lại.</td><td>Chỉ Authorization Server.</td><td>Dài (ngày). Cần bảo vệ rất kỹ.</td></tr>
+</tbody>
+</table>
+</div>
+<h3>3.4 JWT</h3>
+<p><abbr title="JSON Web Token">JWT</abbr> gồm 3 phần ngăn cách bằng dấu chấm: <code>header.payload.signature</code>.</p>
+<pre><code><span class="c">// payload (đã giải mã base64url), rút gọn</span>
+{
+  "iss": "http://localhost:8180/realms/demo",   <span class="c">// issuer: ai phát hành</span>
+  "sub": "a3f1-...-9c2e",                       <span class="c">// subject: người dùng nào</span>
+  "aud": "account",                             <span class="c">// audience: token dành cho ai</span>
+  "exp": 1760000000,                            <span class="c">// expiration: hết hạn lúc nào (giây từ 1970)</span>
+  "scope": "openid profile",
+  "preferred_username": "alice"
+}</code></pre>
+<p>Resource Server kiểm tra token mà <b>không cần hỏi AS mỗi lần</b>:</p>
+<ol>
+<li>Lần đầu, tải <abbr title="JSON Web Key Set">JWKS</abbr> (danh sách khóa công khai) từ AS và cache lại.</li>
+<li>Kiểm tra chữ ký bằng khóa công khai: token có thật do AS ký, chưa bị sửa.</li>
+<li>Kiểm tra <code>iss</code> đúng AS tin cậy, <code>exp</code> chưa hết hạn, <code>aud</code>/scope phù hợp.</li>
+</ol>
+<p>Trong Spring chỉ cần khai báo <code>issuer-uri</code>; Spring tự tìm JWKS qua địa chỉ <code>/.well-known/openid-configuration</code>.</p>
+<h3>3.5 Authorization Code flow: hai "kênh"</h3>
+<p>Flow chuẩn hiện nay là <b>Authorization Code</b>. Điều cần hiểu là dữ liệu đi qua hai kênh có mức an toàn khác nhau:</p>
+<div class="scroll">
+<table>
+<thead><tr><th></th><th>Front-channel (kênh trước)</th><th>Back-channel (kênh sau)</th></tr></thead>
+<tbody>
+<tr><td>Đi qua</td><td>Thanh địa chỉ trình duyệt, redirect (URL)</td><td>Request HTTPS trực tiếp từ Client tới AS</td></tr>
+<tr><td>Ai có thể thấy</td><td>Lịch sử trình duyệt, extension, log proxy, header Referer</td><td>Chỉ hai đầu của kết nối TLS</td></tr>
+<tr><td>Dùng cho</td><td><code>/authorize</code> (xin code)</td><td><code>/token</code> (đổi code lấy token)</td></tr>
+</tbody>
+</table>
+</div>
+<p>Do đó, access token không được truyền qua URL; nó chỉ đi qua kênh sau. Còn <b>authorization code</b> (mã tạm, dùng một lần) đi qua kênh trước, nên nó là điểm yếu mà PKCE bảo vệ.</p>
+<h3>3.6 Các tham số trong request <code>/authorize</code></h3>
+<div class="scroll">
+<table>
+<thead><tr><th>Tham số</th><th>Ý nghĩa</th></tr></thead>
+<tbody>
+<tr><td><code>response_type=code</code></td><td>Tôi muốn nhận authorization code.</td></tr>
+<tr><td><code>client_id</code></td><td>Tên ứng dụng đã đăng ký trên AS.</td></tr>
+<tr><td><code>redirect_uri</code></td><td>Sau khi đăng nhập xong, đưa code về địa chỉ này. AS chỉ chấp nhận địa chỉ đã đăng ký trước.</td></tr>
+<tr><td><code>scope</code></td><td>Phạm vi quyền xin (<code>openid</code> bật OIDC).</td></tr>
+<tr><td><code>state</code></td><td>Chuỗi ngẫu nhiên để Client nhận ra đúng phản hồi của mình, chống CSRF ở bước đăng nhập.</td></tr>
+<tr><td><code>nonce</code> (OIDC)</td><td>Chuỗi ngẫu nhiên nằm trong ID token, chống phát lại token cũ.</td></tr>
+<tr><td><code>code_challenge</code>, <code>code_challenge_method</code></td><td>Phần của PKCE (mục 4).</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section id="pkce">
+<h2>4. PKCE: cơ chế bảo vệ Authorization Code</h2><figure class="figure"><div class="caption-title">Hình 2. Authorization Code + PKCE</div><svg aria-label="Luồng PKCE" role="img" viewbox="0 0 920 270"><defs><marker id="arrow" markerheight="8" markerwidth="8" orient="auto" refx="7" refy="3.5"><path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"></path></marker></defs>
+<rect fill="var(--accent-soft)" height="95" rx="10" stroke="var(--accent)" width="170" x="20" y="90"></rect><text class="diagram-label" text-anchor="middle" x="105" y="120">SPA</text><text class="diagram-sub" text-anchor="middle" x="105" y="145">verifier</text><text class="diagram-sub" text-anchor="middle" x="105" y="165">challenge = S256(verifier)</text>
+<path class="diagram-line" d="M190 112 H300"></path><text class="diagram-sub" text-anchor="middle" x="245" y="98">/authorize</text>
+<rect fill="var(--panel)" height="95" rx="10" stroke="var(--line)" width="180" x="300" y="90"></rect><text class="diagram-label" text-anchor="middle" x="390" y="120">Auth Server</text><text class="diagram-sub" text-anchor="middle" x="390" y="145">lưu challenge</text><text class="diagram-sub" text-anchor="middle" x="390" y="165">phát authorization code</text>
+<path class="diagram-line" d="M480 162 H590"></path><text class="diagram-sub" text-anchor="middle" x="535" y="188">redirect: code</text>
+<rect fill="var(--accent-soft)" height="95" rx="10" stroke="var(--accent)" width="170" x="590" y="90"></rect><text class="diagram-label" text-anchor="middle" x="675" y="120">SPA</text><text class="diagram-sub" text-anchor="middle" x="675" y="145">code + verifier</text><text class="diagram-sub" text-anchor="middle" x="675" y="165">POST /token</text>
+<path class="diagram-line" d="M760 112 H890"></path><text class="diagram-sub" text-anchor="middle" x="825" y="98">đối chiếu S256</text>
+<text class="diagram-sub" text-anchor="middle" x="460" y="235">Authorization code có thể đi qua front-channel; verifier chỉ được gửi ở bước đổi code qua back-channel.</text></svg><figcaption>Challenge được gửi khi yêu cầu authorization code; verifier chỉ xuất hiện ở bước đổi code lấy token.</figcaption></figure>
+<p><b>PKCE</b> = <i>Proof Key for Code Exchange</i> (đọc "pixy"), chuẩn <abbr title="Request for Comments 7636">RFC 7636</abbr>. Tóm tắt: <b>mỗi lần đăng nhập, Client tự tạo một bí mật dùng một lần, và phải trưng ra đúng bí mật đó khi đổi code lấy token</b>.</p>
+<h3>4.1 Vấn đề cần giải quyết</h3>
+<p>Authorization code đi qua front-channel (URL). Giả sử kẻ xấu lấy được code đó (qua extension độc hại, log, hoặc trên mobile là app khác đăng ký cùng đường dẫn redirect). Kẻ xấu mang code tới <code>/token</code> để đổi lấy access token.</p>
+<p>Confidential client thì không sợ chuyện này, vì đổi code phải kèm <code>client_secret</code>. Nhưng SPA là public client, <b>không có secret</b>, nên AS không phân biệt được "đúng ứng dụng đã xin code" với "kẻ cầm trộm code".</p>
+<h3>4.2 Ví dụ trực quan: quy trình gửi và nhận tài sản</h3>
+<div class="callout warn">
+<p>Bạn đến nhà hàng, gửi áo khoác ở quầy.</p>
+<ol>
+<li>Bạn viết một dòng bí mật lên mẩu giấy và <b>giữ trong túi</b> (đây là <span class="chip secret">code_verifier</span>).</li>
+<li>Bạn đưa lễ tân <b>dấu vân tay</b> của mẩu giấy (đây là <span class="chip secret">code_challenge</span>). Từ dấu vân tay không thể dựng lại nội dung mẩu giấy (hàm băm một chiều).</li>
+<li>Lễ tân đưa bạn <b>phiếu số 57</b> (đây là <span class="chip as">authorization code</span>) và ghi lại "phiếu 57 gắn với dấu vân tay này".</li>
+<li>Giữa đường, một kẻ nhặt được phiếu 57 (code bị chặn). Hắn đến quầy đòi áo.</li>
+<li>Lễ tân yêu cầu: "Cho xem mẩu giấy gốc". Lễ tân lấy dấu vân tay mẩu giấy đó, so với bản đã ghi. Kẻ trộm không có mẩu giấy nên <b>không lấy được áo</b>. Bạn có mẩu giấy gốc nên nhận áo (đây là access token).</li>
+</ol>
+</div>
+<p>Authorization code có thể bị lộ mà chưa đủ để đổi lấy token, vì bước trao đổi còn yêu cầu verifier tương ứng. Và mẩu giấy gốc chỉ được đưa ra ở bước cuối, qua back-channel.</p>
+<h3>4.3 Cơ chế từng bước</h3>
+<ol class="flow">
+<li><span class="chip spa">SPA</span> tự sinh <span class="chip secret">code_verifier</span>
+<p>Chuỗi ngẫu nhiên 43 đến 128 ký tự (dùng CSPRNG). SPA <b>giữ lại, không gửi đi đâu</b>.</p></li>
+<li><span class="chip spa">SPA</span> tính <span class="chip secret">code_challenge</span>
+<p><code>code_challenge = BASE64URL( SHA-256( code_verifier ) )</code>. Đây là phương thức <code>S256</code>.</p></li>
+<li><span class="chip spa">SPA</span> → <span class="chip as">Auth Server</span> qua front-channel
+<p>Chuyển hướng trình duyệt tới <code>/authorize?...&amp;code_challenge=...&amp;code_challenge_method=S256</code>. Chỉ có <b>challenge</b> đi trên URL, verifier thì không.</p></li>
+<li><span class="chip as">Auth Server</span> lưu challenge
+<p>Người dùng đăng nhập xong, AS sinh <span class="chip as">authorization code</span> và <b>ghi nhớ code này đi cùng challenge</b>.</p></li>
+<li><span class="chip as">Auth Server</span> → <span class="chip spa">SPA</span> qua front-channel
+<p>Redirect về <code>redirect_uri?code=...&amp;state=...</code>. Đây là chỗ code có thể bị lộ.</p></li>
+<li><span class="chip spa">SPA</span> → <span class="chip as">Auth Server</span> qua back-channel
+<p><code>POST /token</code> với <code>grant_type=authorization_code</code>, <code>code</code>, <code>redirect_uri</code>, <code>client_id</code> và <b><code>code_verifier</code> (bản gốc)</b>.</p></li>
+<li><span class="chip as">Auth Server</span> kiểm tra
+<p>Tính <code>BASE64URL(SHA-256(code_verifier))</code> rồi so với challenge đã lưu. <b>Khớp</b> thì phát access token (và ID token, refresh token). <b>Không khớp</b> thì trả lỗi <code>invalid_grant</code>.</p></li>
+</ol>
+<h3>4.4 Vì sao an toàn</h3>
+<ul>
+<li><b>Hàm băm một chiều</b>: kẻ nghe lén thấy challenge ở bước 3 cũng không suy ra được verifier.</li>
+<li><b>Verifier chỉ lộ ở bước 6</b>, qua kết nối TLS tới AS, lúc đó code đã nằm trong tay SPA thật.</li>
+<li><b>Dùng một lần</b>: mỗi lần đăng nhập sinh cặp mới, bắt được cặp cũ vô ích.</li>
+<li><b>Entropy cao</b>: 32 byte ngẫu nhiên cho ra 43 ký tự, không thể đoán.</li>
+</ul>
+<h3>4.5 Chi tiết kỹ thuật cần biết</h3>
+<ul>
+<li><b>BASE64URL</b>: Base64 thường có ký tự <code>+</code>, <code>/</code>, <code>=</code> làm hỏng URL. BASE64URL đổi <code>+</code> thành <code>-</code>, <code>/</code> thành <code>_</code> và bỏ <code>=</code> ở cuối.</li>
+<li><b><code>S256</code> và <code>plain</code></b>: <code>plain</code> gửi thẳng verifier làm challenge, tức là mất tác dụng chống nghe lén. Chỉ dùng <code>plain</code> khi hoàn toàn không thể băm. Luôn chọn <code>S256</code>.</li>
+<li><b>PKCE và client secret không loại trừ nhau</b>. OAuth 2.1 (bản chuẩn hóa gộp các thực hành tốt) yêu cầu dùng PKCE cho <b>mọi</b> client, kể cả confidential client.</li>
+<li><b>Implicit flow</b> (trả token thẳng trên URL) đã bị loại khỏi khuyến nghị hiện nay; Authorization Code + PKCE thay thế nó cho SPA.</li>
+</ul>
+<h3>4.6 Phòng thí nghiệm PKCE</h3>
+<p>Phần này chạy thật trong trình duyệt bằng Web Crypto, đúng thuật toán mà thư viện OIDC dùng. Thực hiện lần lượt các bước để quan sát trạng thái của từng thành phần.</p>
+<div class="lab" id="lab">
+<h3>Mô phỏng một lần đăng nhập</h3>
+<p class="callout bad" hidden="" id="lab-warn"><b>Trình duyệt không hỗ trợ <code>crypto.subtle</code>.</b> Web Crypto chỉ hoạt động trên HTTPS hoặc <code>localhost</code>. Hãy mở file qua <code>http://localhost</code> hoặc nhờ trình duyệt hiện đại mở trực tiếp file.</p>
+<div class="row">
+<p><b>Bước 1.</b> <span class="chip spa">SPA</span> sinh <span class="chip secret">code_verifier</span> ngẫu nhiên (32 byte, BASE64URL).</p>
+<button class="btn" id="b1">Sinh code_verifier mới</button>
+<div aria-live="polite" class="out" id="o1"></div>
+</div>
+<div class="row">
+<p><b>Bước 2.</b> <span class="chip spa">SPA</span> băm SHA-256 rồi mã hóa BASE64URL để ra <span class="chip secret">code_challenge</span>.</p>
+<button class="btn" disabled="" id="b2">Tính code_challenge</button>
+<div aria-live="polite" class="out" id="o2"></div>
+</div>
+<div class="row">
+<p><b>Bước 3.</b> <span class="chip spa">SPA</span> chuyển hướng tới <span class="chip as">Auth Server</span> (chỉ mang challenge). Auth Server đăng nhập người dùng, sinh code và <b>ghi nhớ code kèm challenge</b>.</p>
+<button class="btn" disabled="" id="b3">Gửi /authorize và nhận code</button>
+<div aria-live="polite" class="out" id="o3"></div>
+</div>
+<div class="row">
+<p><b>Bước 4.</b> Ai đó gọi <code>/token</code> với code vừa cấp. Chọn xem <b>ai</b> đang gọi và verifier họ gửi lên:</p>
+<label><input checked="" name="who" type="radio" value="real"/> SPA thật (có verifier gốc ở bước 1)</label>
+<label><input name="who" type="radio" value="guess"/> Kẻ trộm code, đoán bừa một verifier</label>
+<label><input name="who" type="radio" value="none"/> Kẻ trộm code, không gửi verifier</label>
+<label><input name="who" type="radio" value="custom"/> Tự nhập verifier:</label>
+<input aria-label="Verifier tự nhập" id="custom" placeholder="nhập thử một chuỗi bất kỳ" type="text"/>
+<p style="margin-top:12px"><button class="btn" disabled="" id="b4">Gọi /token</button></p>
+<div aria-live="polite" id="o4"></div>
+</div>
+<div class="row">
+<p><b>Thử riêng hàm băm.</b> Sửa một ký tự và xem challenge thay đổi hoàn toàn (không có quy luật nào để suy ngược).</p>
+<input aria-label="Chuỗi đầu vào để băm" id="free" type="text" value="hello-pkce"/>
+<div aria-live="polite" class="out" id="o5"></div>
+<p style="margin-top:10px"><button class="btn ghost" id="rfc">Nạp ví dụ chuẩn trong RFC 7636</button></p>
+<div id="o6"></div>
+</div>
+</div>
+<h3>4.7 PKCE chống được gì, không chống được gì</h3>
+<div class="cards">
+<div class="card"><h4 class="pro">Chống được</h4>
+<ul><li>Đánh cắp hoặc chặn authorization code rồi đem đi đổi token.</li><li>Tiêm một code của kẻ tấn công vào phiên của nạn nhân (authorization code injection).</li></ul></div>
+<div class="card"><h4 class="con">Không chống được</h4>
+<ul><li><b>XSS</b>: nếu kẻ tấn công chạy được JavaScript trong trang, hắn đọc thẳng token đã nhận xong.</li><li>Người dùng bị lừa nhập mật khẩu vào trang giả.</li><li>Thiết bị đã bị cài mã độc.</li></ul></div>
+</div>
+</section>
+<section id="approach-a">
+<h2>5. Mô hình A — SPA là Public Client</h2><figure class="figure"><div class="caption-title">Hình 3. Mô hình A — SPA giữ access token</div><svg aria-label="Mô hình A SPA public client" role="img" viewbox="0 0 920 250"><defs><marker id="arrow" markerheight="8" markerwidth="8" orient="auto" refx="7" refy="3.5"><path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"></path></marker></defs>
+<rect fill="var(--accent-soft)" height="92" rx="10" stroke="var(--accent)" width="180" x="20" y="88"></rect><text class="diagram-label" text-anchor="middle" x="110" y="118">React SPA</text><text class="diagram-sub" text-anchor="middle" x="110" y="143">Public client</text><text class="diagram-sub" text-anchor="middle" x="110" y="163">giữ access token</text>
+<path class="diagram-line" d="M200 110 C280 50 340 50 420 110"></path><text class="diagram-sub" text-anchor="middle" x="310" y="45">Authorization Code + PKCE</text>
+<path class="diagram-line" d="M200 160 H420"></path><text class="diagram-sub" text-anchor="middle" x="310" y="188">Bearer token</text>
+<rect fill="var(--panel)" height="92" rx="10" stroke="var(--line)" width="180" x="420" y="88"></rect><text class="diagram-label" text-anchor="middle" x="510" y="118">Authorization Server</text><text class="diagram-sub" text-anchor="middle" x="510" y="143">login · token · JWKS</text>
+<path class="diagram-line" d="M600 134 H700"></path>
+<rect fill="var(--panel)" height="92" rx="10" stroke="var(--line)" width="200" x="700" y="88"></rect><text class="diagram-label" text-anchor="middle" x="800" y="118">Gateway → Services</text><text class="diagram-sub" text-anchor="middle" x="800" y="143">Resource Server</text><text class="diagram-sub" text-anchor="middle" x="800" y="163">xác thực JWT</text>
+</svg><figcaption>SPA là public client. Gateway và service đóng vai trò Resource Server.</figcaption></figure>
+<h3>5.1 Kiến trúc</h3>
+<div class="layers">
+<div class="box"><span class="chip spa">React SPA</span><b>Public client</b>Chạy OIDC, giữ token.</div>
+<div class="hop">⇄</div>
+<div class="box"><span class="chip as">Auth Server</span><b>Cấp token</b>Đăng nhập, PKCE, JWKS.</div>
+<div class="hop">→</div>
+<div class="box"><span class="chip gw">Gateway</span><b>Resource Server</b>Kiểm tra JWT, định tuyến.</div>
+<div class="hop">→</div>
+<div class="box"><span class="chip svc">Service</span><b>Resource Server</b>Kiểm tra JWT lần nữa (khuyến nghị).</div>
+</div>
+<h3>5.2 Luồng đầy đủ</h3>
+<ol class="flow">
+<li><span class="chip spa">SPA</span> → <span class="chip as">Auth Server</span>
+<p>Tạo verifier, challenge và <code>state</code>; chuyển hướng tới <code>/authorize</code>.</p></li>
+<li><span class="chip as">Auth Server</span> đăng nhập người dùng
+<p>Form đăng nhập nằm trên domain của AS, SPA không bao giờ thấy mật khẩu.</p></li>
+<li><span class="chip as">Auth Server</span> → <span class="chip spa">SPA</span>
+<p>Redirect về SPA kèm <code>code</code> và <code>state</code>. SPA kiểm tra <code>state</code> khớp.</p></li>
+<li><span class="chip spa">SPA</span> → <span class="chip as">Auth Server</span> (<code>/token</code>)
+<p>Gửi code + <code>code_verifier</code>. Nhận access token, ID token, (có thể) refresh token.</p></li>
+<li><span class="chip spa">SPA</span> → <span class="chip gw">Gateway</span>
+<p>Gọi API với header <code>Authorization: Bearer &lt;access_token&gt;</code>.</p></li>
+<li><span class="chip gw">Gateway</span> kiểm tra JWT rồi chuyển xuống <span class="chip svc">Service</span>
+<p>Kiểm tra chữ ký, <code>iss</code>, <code>exp</code>. Hợp lệ thì định tuyến và (thường) chuyển tiếp nguyên token.</p></li>
+</ol>
+<h3>5.3 Các khái niệm riêng của cách A</h3>
+<ul>
+<li><b>Resource Server không giữ phiên (stateless)</b>: mỗi request tự mang token, Gateway không cần bộ nhớ phiên, scale ngang dễ. CSRF ít là vấn đề vì token nằm ở header do code JavaScript gắn vào, không phải cookie tự động gửi.</li>
+<li><b>Nơi lưu token trong trình duyệt</b>: in-memory (biến JavaScript, mất khi tải lại trang), <code>sessionStorage</code>, hoặc <code>localStorage</code>. Cả ba đều đọc được bởi JavaScript, nên đều lộ khi bị XSS. In-memory chỉ khó khai thác hơn một chút.</li>
+<li><b>Refresh token trong trình duyệt</b>: phần khó nhất. Nên dùng <b>refresh token rotation</b> (mỗi lần dùng đổi token mới, token cũ bị vô hiệu; dùng lại token cũ là báo động) và thời hạn ngắn.</li>
+<li><b>CORS</b>: SPA (origin <code>:5173</code>) gọi Gateway (origin <code>:8080</code>) và AS (origin <code>:8180</code>) là gọi chéo origin, nên cả hai phải bật CORS cho origin của SPA.</li>
+<li><b>Thu hồi token</b>: JWT còn hiệu lực đến khi hết hạn. Giảm rủi ro bằng access token ngắn hạn.</li>
+<li><b>Defense in depth (phòng thủ nhiều lớp)</b>: Gateway kiểm tra JWT chưa đủ. Service phía sau cũng nên là Resource Server, kẻ nào gọi thẳng vào service (bỏ qua Gateway) vẫn bị chặn.</li>
+</ul>
+<div class="callout warn">
+<span class="t">Nhận định quan trọng</span>
+<p>Cách A đúng chuẩn và rất phổ biến, đặc biệt khi dùng IdP bên thứ ba như Auth0 hoặc Keycloak. Điểm yếu cố hữu là <b>token nằm trong JavaScript</b>. Tài liệu hướng dẫn của IETF cho ứng dụng trình duyệt xếp BFF là kiến trúc được ưu tiên về bảo mật; SPA tự giữ token là lựa chọn chấp nhận được khi bạn chủ động chấp nhận rủi ro XSS.</p>
+</div>
+</section>
+<section id="approach-b">
+<h2>6. Mô hình B — Backend For Frontend (BFF)</h2><figure class="figure"><div class="caption-title">Hình 4. Mô hình BFF — token được giữ phía máy chủ</div><svg aria-label="Mô hình BFF" role="img" viewbox="0 0 920 250"><defs><marker id="arrow" markerheight="8" markerwidth="8" orient="auto" refx="7" refy="3.5"><path d="M0,0 L7,3.5 L0,7 z" fill="currentColor"></path></marker></defs>
+<rect fill="var(--accent-soft)" height="92" rx="10" stroke="var(--accent)" width="170" x="20" y="88"></rect><text class="diagram-label" text-anchor="middle" x="105" y="118">React SPA</text><text class="diagram-sub" text-anchor="middle" x="105" y="143">cookie phiên</text><text class="diagram-sub" text-anchor="middle" x="105" y="163">không giữ token</text>
+<path class="diagram-line" d="M190 134 H310"></path><text class="diagram-sub" text-anchor="middle" x="250" y="119">HTTP + cookie</text>
+<rect fill="var(--accent-soft)" height="92" rx="10" stroke="var(--accent)" width="220" x="310" y="88"></rect><text class="diagram-label" text-anchor="middle" x="420" y="118">Gateway / BFF</text><text class="diagram-sub" text-anchor="middle" x="420" y="143">confidential client</text><text class="diagram-sub" text-anchor="middle" x="420" y="163">giữ phiên + token</text>
+<path class="diagram-line" d="M530 110 C610 50 680 50 750 110"></path><text class="diagram-sub" text-anchor="middle" x="640" y="45">OAuth back-channel</text>
+<rect fill="var(--panel)" height="92" rx="10" stroke="var(--line)" width="150" x="750" y="88"></rect><text class="diagram-label" text-anchor="middle" x="825" y="118">Auth Server</text><text class="diagram-sub" text-anchor="middle" x="825" y="143">token</text><text class="diagram-sub" text-anchor="middle" x="825" y="163">+ JWKS</text>
+<path class="diagram-line" d="M530 160 H650"></path><text class="diagram-sub" text-anchor="middle" x="590" y="190">TokenRelay → Service</text>
+</svg><figcaption>Trình duyệt chỉ giữ cookie phiên; Gateway thực hiện OAuth và relay token tới service.</figcaption></figure>
+<h3>6.1 Ý tưởng</h3>
+<p>Chuyển toàn bộ phần OAuth từ trình duyệt sang Gateway. Gateway là <b>confidential client</b>: có <code>client_secret</code>, tự đổi code lấy token, <b>giữ token trong bộ nhớ server (phiên)</b>. Trình duyệt chỉ nhận một cookie phiên và không bao giờ thấy token.</p>
+<div class="layers">
+<div class="box"><span class="chip spa">React SPA</span><b>Không có token</b>Chỉ có cookie phiên <code>HttpOnly</code>.</div>
+<div class="hop">⇄</div>
+<div class="box"><span class="chip gw">Gateway (BFF)</span><b>Confidential client</b>Giữ phiên + token, chạy OAuth.</div>
+<div class="hop">⇄</div>
+<div class="box"><span class="chip as">Auth Server</span><b>Cấp token</b>Cho Gateway.</div>
+<div class="hop">→</div>
+<div class="box"><span class="chip svc">Service</span><b>Resource Server</b>Nhận token do Gateway gắn.</div>
+</div>
+<h3>6.2 Luồng đầy đủ</h3>
+<ol class="flow">
+<li><span class="chip spa">Trình duyệt</span> mở ứng dụng, chưa có phiên
+<p>Gateway trả chuyển hướng (302) tới <code>/oauth2/authorization/keycloak</code>.</p></li>
+<li><span class="chip gw">Gateway</span> → <span class="chip as">Auth Server</span>
+<p>Gateway tạo <code>state</code> (và có thể cả PKCE), chuyển hướng người dùng tới <code>/authorize</code>.</p></li>
+<li><span class="chip as">Auth Server</span> đăng nhập người dùng, redirect về Gateway kèm <code>code</code>
+<p>Địa chỉ nhận mặc định của Spring: <code>/login/oauth2/code/{registrationId}</code>.</p></li>
+<li><span class="chip gw">Gateway</span> → <span class="chip as">Auth Server</span> (<code>/token</code>), back-channel
+<p>Đổi code bằng <code>client_id</code> + <code>client_secret</code>. Lưu token vào phiên phía server.</p></li>
+<li><span class="chip gw">Gateway</span> → <span class="chip spa">Trình duyệt</span>
+<p>Đặt cookie phiên (<code>HttpOnly; Secure; SameSite</code>), chuyển hướng về trang chính.</p></li>
+<li><span class="chip spa">SPA</span> gọi <code>/api/...</code> kèm cookie → <span class="chip gw">Gateway</span> → <span class="chip svc">Service</span>
+<p>Bộ lọc <b>TokenRelay</b> lấy access token từ phiên, gắn <code>Authorization: Bearer ...</code> rồi chuyển xuống service.</p></li>
+</ol>
+<h3>6.3 Các khái niệm riêng của cách B</h3>
+<ul>
+<li><b>Cookie phiên và cờ bảo vệ</b>: <code>HttpOnly</code> (JavaScript không đọc được, chặn XSS đọc phiên), <code>Secure</code> (chỉ gửi qua HTTPS), <code>SameSite=Lax/Strict</code> (hạn chế gửi cookie từ trang khác).</li>
+<li><b>CSRF trở lại</b>: vì cookie được trình duyệt tự gửi, cần chống CSRF (cookie XSRF-TOKEN + header <code>X-XSRF-TOKEN</code>) cho các request ghi dữ liệu (POST, PUT, DELETE).</li>
+<li><b>Token Relay</b>: Gateway chuyển token người dùng xuống service, để service biết "ai là người dùng thật".</li>
+<li><b>Session store</b>: chạy nhiều bản Gateway thì phiên phải dùng chung (Spring Session + Redis), nếu không người dùng sẽ bị đá ra khi request rơi vào bản khác. Gateway trở thành thành phần <b>có trạng thái</b>.</li>
+<li><b>Cùng origin</b>: SPA nên được phục vụ từ cùng origin với Gateway (hoặc sau cùng reverse proxy) để cookie hoạt động mượt và không cần CORS.</li>
+<li><b>XSS vẫn nguy hiểm nhưng khác</b>: kẻ tấn công không lấy được token để mang đi, nhưng vẫn có thể gọi API ngay trong trang nạn nhân khi trang còn mở. BFF thu hẹp thiệt hại chứ không xóa XSS.</li>
+</ul>
+</section>
+<section id="compare">
+<h2>7. So sánh hai mô hình và tiêu chí lựa chọn</h2>
+<div class="key-point"><b>Nguyên tắc lựa chọn</b>Không nên chọn mô hình chỉ dựa trên việc “có token hay không”. Hãy đánh giá đồng thời nơi lưu credential, mô hình trust, khả năng chống XSS/CSRF, yêu cầu cùng origin, trạng thái của Gateway và năng lực vận hành session store.</div><div class="scroll">
+<table>
+<thead><tr><th>Tiêu chí</th><th>A: SPA public client</th><th>B: BFF</th></tr></thead>
+<tbody>
+<tr><td>Token nằm ở đâu</td><td>Trình duyệt (JavaScript)</td><td>Server (Gateway)</td></tr>
+<tr><td>Loại client</td><td>Public, không có secret, dùng PKCE</td><td>Confidential, có secret</td></tr>
+<tr><td>Rủi ro XSS đánh cắp token</td><td class="con">Cao</td><td class="pro">Thấp (token không xuống trình duyệt)</td></tr>
+<tr><td>Gateway có trạng thái?</td><td class="pro">Không (stateless)</td><td class="con">Có (phiên, thường cần Redis)</td></tr>
+<tr><td>CSRF</td><td class="pro">Ít lo (Bearer header)</td><td class="con">Phải cấu hình</td></tr>
+<tr><td>CORS</td><td class="con">Cần (khác origin)</td><td class="pro">Thường không cần (cùng origin)</td></tr>
+<tr><td>Độ phức tạp phía frontend</td><td class="con">Cao (refresh, lưu token, xử lý 401)</td><td class="pro">Thấp (chỉ gọi API, đã có cookie)</td></tr>
+<tr><td>Độ phức tạp phía backend</td><td class="pro">Thấp (Resource Server)</td><td class="con">Cao hơn (OAuth client, phiên, CSRF)</td></tr>
+<tr><td>Hợp với</td><td>Ứng dụng thông thường, prototype, hệ thống nội bộ, khi đã dùng IdP ngoài</td><td>Tài chính, y tế, dữ liệu nhạy cảm, yêu cầu kiểm toán chặt</td></tr>
+<tr><td>Giá trị khi dạy</td><td>Thấy rõ OAuth2/PKCE từng bước</td><td>Thấy rõ vì sao "đưa token ra khỏi trình duyệt"</td></tr>
+</tbody>
+</table>
+</div>
+<div class="callout ok">
+<span class="t">Gợi ý lộ trình giảng dạy</span>
+<p>Dạy A trước để sinh viên hiểu OAuth2/OIDC và PKCE thật sự hoạt động thế nào. Sau đó cho sinh viên mở DevTools, tìm token trong <i>Application → Session Storage</i> (hoặc Console) để tự thấy token "trần" trong trình duyệt. Rồi chuyển sang B và xác nhận token biến mất, chỉ còn cookie <code>HttpOnly</code>.</p>
+</div>
+</section>
+<section id="demo-prep">
+<h2>8. Chuẩn bị môi trường thực hành</h2>
+<h3>8.1 Bức tranh tổng thể</h3>
+<pre data-name="Các thành phần và cổng (port)"><code>React SPA (Vite)      http://localhost:5173
+API Gateway           http://localhost:8080    <span class="c">(Spring Cloud Gateway)</span>
+Product Service       http://localhost:8081    <span class="c">(Spring Boot, service nội bộ)</span>
+Keycloak (Auth Server) http://localhost:8180   <span class="c">(chạy bằng Docker)</span></code></pre>
+<p>Demo dùng <b>Keycloak</b> làm Authorization Server vì cấu hình bằng giao diện, hỗ trợ sẵn PKCE và CORS, sinh viên không phải viết code cho AS. Có thể thay bằng Spring Authorization Server sau khi hiểu flow.</p>
+<h3>8.2 Cần cài</h3>
+<ul>
+<li>JDK (Java Development Kit) phiên bản mà Spring Boot bạn chọn yêu cầu, và Maven hoặc Gradle.</li>
+<li>Node.js (để chạy React bằng Vite).</li>
+<li>Docker (để chạy Keycloak).</li>
+</ul>
+<h3>8.3 Dựng Keycloak</h3>
+<ol class="flow">
+<li>Chạy Keycloak
+<pre><code>docker run --name kc -p 8180:8080 \
+  -e KC_BOOTSTRAP_ADMIN_USERNAME=admin \
+  -e KC_BOOTSTRAP_ADMIN_PASSWORD=admin \
+  quay.io/keycloak/keycloak:26.0 start-dev</code></pre>
+<p>Mở <code>http://localhost:8180</code>, đăng nhập <code>admin / admin</code>.</p></li>
+<li>Tạo realm <code>demo</code>
+<p>Realm là "không gian" riêng chứa người dùng, client, cấu hình. Issuer của nó sẽ là <code>http://localhost:8180/realms/demo</code>.</p></li>
+<li>Tạo người dùng <code>alice</code>
+<p>Mục <i>Users → Create user</i>. Vào tab <i>Credentials</i>, đặt mật khẩu và tắt <i>Temporary</i>.</p></li>
+</ol>
+<div class="callout warn">Tên menu và nhãn trong Keycloak có thể khác một chút giữa các phiên bản. Nếu không thấy đúng tên, tìm mục tương đương.</div>
+<h3>8.4 Product Service (cổng 8081): service nội bộ cũng là Resource Server</h3>
+<p>Tạo project từ <a href="https://start.spring.io">start.spring.io</a>, chọn <i>Spring Web</i> và <i>OAuth2 Resource Server</i>. (Tên starter đã thay đổi giữa Spring Boot 3 và 4, nên nhờ Initializr chọn giúp thay vì tự gõ.)</p>
+<pre data-name="product-service / application.yml"><code>server:
+  port: 8081
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8180/realms/demo</code></pre>
+<pre data-name="product-service / SecurityConfig.java"><code>@Configuration
+class SecurityConfig {
+  @Bean
+  SecurityFilterChain chain(HttpSecurity http) throws Exception {
+    http
+      .authorizeHttpRequests(a -&gt; a.anyRequest().authenticated())
+      .oauth2ResourceServer(o -&gt; o.jwt(Customizer.withDefaults()));
+    return http.build();
+  }
+}</code></pre>
+<pre data-name="product-service / ProductController.java"><code>@RestController
+class ProductController {
+  @GetMapping("/api/products")
+  Map&lt;String, Object&gt; list(@AuthenticationPrincipal Jwt jwt) {
+    return Map.of(
+      "user", jwt.getClaimAsString("preferred_username"),
+      "items", List.of("Laptop", "Chuột", "Bàn phím"));
+  }
+}</code></pre>
+<p>Khởi động service và thực hiện kiểm tra <code>curl -i http://localhost:8081/api/products</code>. Kết quả đúng là <code>401 Unauthorized</code>, vì chưa có token.</p>
+</section>
+<section id="demo-a">
+<h2>9. Thực hành A — SPA Public Client và Gateway Resource Server</h2>
+<h3>9.1 Đăng ký client <code>react-spa</code> trong Keycloak</h3>
+<ol class="flow">
+<li>Tạo client
+<p>Client ID: <code>react-spa</code>. Loại: OpenID Connect.</p></li>
+<li>Cài đặt Capability
+<p><b>Client authentication: Off</b> (đây chính là public client, không có secret). <b>Standard flow: On</b> (đây là Authorization Code). Tắt <i>Direct access grants</i>.</p></li>
+<li>Cài đặt địa chỉ
+<p><i>Valid redirect URIs</i>: <code>http://localhost:5173/*</code>. <i>Web origins</i>: <code>http://localhost:5173</code> (bật CORS cho SPA).</p></li>
+<li>Bắt buộc PKCE
+<p>Tab <i>Advanced → Advanced settings → Proof Key for Code Exchange Code Challenge Method</i> chọn <code>S256</code>. Từ giờ Keycloak từ chối request không có PKCE.</p></li>
+</ol>
+<h3>9.2 Gateway (cổng 8080) làm Resource Server</h3>
+<p>Tạo project, chọn <i>Reactive Gateway</i> và <i>OAuth2 Resource Server</i>.</p>
+<pre data-name="gateway / application.yml"><code>server:
+  port: 8080
+spring:
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8180/realms/demo
+  cloud:
+    gateway:
+      server:
+        webflux:                      <span class="c"># tiền tố này áp dụng cho Spring Cloud 2025.x, hãy đối chiếu docs</span>
+          routes:
+            - id: product
+              uri: http://localhost:8081
+              predicates:
+                - Path=/api/products/**</code></pre>
+<pre data-name="gateway / SecurityConfig.java"><code>@Configuration
+@EnableWebFluxSecurity
+class SecurityConfig {
+
+  @Bean
+  SecurityWebFilterChain chain(ServerHttpSecurity http) {
+    return http
+      .csrf(ServerHttpSecurity.CsrfSpec::disable)  <span class="c">// dùng Bearer header, không dùng cookie</span>
+      .cors(Customizer.withDefaults())             <span class="c">// dùng bean corsSource bên dưới</span>
+      .authorizeExchange(a -&gt; a
+          .pathMatchers("/actuator/health").permitAll()
+          .anyExchange().authenticated())
+      .oauth2ResourceServer(o -&gt; o.jwt(Customizer.withDefaults()))
+      .build();
+  }
+
+  <span class="c">// dùng lớp CorsConfigurationSource và UrlBasedCorsConfigurationSource bản reactive</span>
+  @Bean
+  CorsConfigurationSource corsSource() {
+    var c = new CorsConfiguration();
+    c.setAllowedOrigins(List.of("http://localhost:5173"));
+    c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+    c.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+    var s = new UrlBasedCorsConfigurationSource();
+    s.registerCorsConfiguration("/**", c);
+    return s;
+  }
+}</code></pre>
+<h3>9.3 React SPA (cổng 5173)</h3>
+<pre data-name="Terminal"><code>npm create vite@latest spa -- --template react
+cd spa
+npm install oidc-client-ts react-oidc-context
+npm run dev</code></pre>
+<p>Thư viện <code>oidc-client-ts</code> tự làm PKCE (sinh verifier, challenge, <code>state</code>, đổi code). Thư viện đảm nhiệm các bước tương ứng với quy trình ở mục 4.3, bao gồm sinh verifier, challenge, state và trao đổi authorization code.</p>
+<pre data-name="spa / src/main.jsx"><code>import { createRoot } from "react-dom/client";
+import { AuthProvider } from "react-oidc-context";
+import App from "./App.jsx";
+
+const oidcConfig = {
+  authority: "http://localhost:8180/realms/demo",  <span class="c">// issuer của Keycloak</span>
+  client_id: "react-spa",
+  redirect_uri: "http://localhost:5173/",
+  scope: "openid profile",
+  onSigninCallback: () =&gt;
+    window.history.replaceState({}, document.title, window.location.pathname),
+};
+
+createRoot(document.getElementById("root")).render(
+  &lt;AuthProvider {...oidcConfig}&gt;
+    &lt;App /&gt;
+  &lt;/AuthProvider&gt;
+);</code></pre>
+<pre data-name="spa / src/App.jsx"><code>import { useState } from "react";
+import { useAuth } from "react-oidc-context";
+
+export default function App() {
+  const auth = useAuth();
+  const [data, setData] = useState(null);
+
+  if (auth.isLoading) return &lt;p&gt;Đang tải...&lt;/p&gt;;
+  if (auth.error) return &lt;p&gt;Lỗi: {auth.error.message}&lt;/p&gt;;
+  if (!auth.isAuthenticated)
+    return &lt;button onClick={() =&gt; auth.signinRedirect()}&gt;Đăng nhập&lt;/button&gt;;
+
+  const callApi = async () =&gt; {
+    const res = await fetch("http://localhost:8080/api/products", {
+      headers: { Authorization: `Bearer ${auth.user.access_token}` },
+    });
+    setData(await res.json());
+  };
+
+  return (
+    &lt;div&gt;
+      &lt;p&gt;Xin chào {auth.user.profile.preferred_username}&lt;/p&gt;
+      &lt;button onClick={callApi}&gt;Gọi /api/products&lt;/button&gt;
+      &lt;button onClick={() =&gt; auth.signoutRedirect()}&gt;Đăng xuất&lt;/button&gt;
+      &lt;pre&gt;{JSON.stringify(data, null, 2)}&lt;/pre&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+<h3>9.4 Chạy và quan sát PKCE bằng mắt</h3>
+<ol class="flow">
+<li>Mở Developer Tools → tab <b>Network</b>, bật <i>Preserve log</i>. Mở <code>http://localhost:5173</code> và chọn <b>Đăng nhập</b>.</li>
+<li>Tìm request tới <code>/protocol/openid-connect/auth</code>
+<p>Trong URL thấy <code>code_challenge=...</code> và <code>code_challenge_method=S256</code>, cùng <code>state</code>. <b>Không có verifier</b> ở đây (khớp bước 3 của mục 4.3).</p></li>
+<li>Đăng nhập <code>alice</code>, trình duyệt quay về <code>http://localhost:5173/?code=...&amp;state=...</code>
+<p>Đây là front-channel, nơi code lộ ra (khớp bước 5).</p></li>
+<li>Tìm request <code>POST .../token</code>, xem tab <b>Payload</b>
+<p>Thấy <code>code_verifier=...</code> được gửi lên (khớp bước 6). Có thể đối chiếu bằng cách tính SHA-256 của nó trong phòng thí nghiệm ở mục 4.6, kết quả phải bằng <code>code_challenge</code> ở bước 2.</p></li>
+<li>Bấm <b>Gọi /api/products</b>
+<p>Request tới Gateway có header <code>Authorization: Bearer ...</code>. Quan sát dữ liệu trả về, kèm tên <code>alice</code> (do Product Service đọc từ JWT).</p></li>
+<li>Thử <b>không có token</b>:
+<pre><code>curl -i http://localhost:8080/api/products
+<span class="c"># HTTP/1.1 401 Unauthorized</span></code></pre></li>
+<li>Mở <b>Application → Session Storage</b>
+<p>Bạn thấy token được lưu trực tiếp trong môi trường trình duyệt. Chép chuỗi <code>access_token</code> dán vào <code>jwt.io</code> để xem payload (chỉ làm với token demo). Đây là điểm yếu XSS của cách A.</p></li>
+</ol>
+<div class="callout ok"><span class="t">Kết quả cần đạt</span>
+<p>Sinh viên chỉ ra được: challenge đi trên URL, verifier chỉ đi ở <code>/token</code>, Gateway từ chối khi thiếu token, và token đọc được trong storage.</p></div>
+</section>
+<section id="demo-b">
+<h2>10. Thực hành B — BFF và phiên phía máy chủ</h2>
+<p>Giữ nguyên Keycloak và Product Service. Thay đổi nằm ở Gateway và React.</p>
+<h3>10.1 Đăng ký client <code>bff-gateway</code> trong Keycloak</h3>
+<ol class="flow">
+<li>Tạo client mới, Client ID <code>bff-gateway</code>.</li>
+<li><b>Client authentication: On</b> (confidential client), <b>Standard flow: On</b>.</li>
+<li><i>Valid redirect URIs</i>: <code>http://localhost:8080/login/oauth2/code/keycloak</code>. Không cần <i>Web origins</i> vì trình duyệt không gọi Keycloak bằng JavaScript.</li>
+<li>Tab <i>Credentials</i>: sao chép <b>Client secret</b>.</li>
+</ol>
+<h3>10.2 Gateway thành OAuth2 Client</h3>
+<p>Thêm dependency <i>OAuth2 Client</i> (thay cho Resource Server, hoặc dùng cả hai nếu cần nhận token trực tiếp từ client khác).</p>
+<pre data-name="gateway / application.yml"><code>server:
+  port: 8080
+spring:
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:                      <span class="c"># registrationId, xuất hiện trong redirect URI</span>
+            client-id: bff-gateway
+            client-secret: DÁN-SECRET-VÀO-ĐÂY
+            scope: openid,profile
+            authorization-grant-type: authorization_code
+        provider:
+          keycloak:
+            issuer-uri: http://localhost:8180/realms/demo
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: product
+              uri: http://localhost:8081
+              predicates:
+                - Path=/api/products/**
+              filters:
+                - TokenRelay=              <span class="c"># lấy token từ phiên, gắn vào header Authorization</span>
+                - RemoveRequestHeader=Cookie  <span class="c"># không chuyển cookie phiên xuống service</span></code></pre>
+<pre data-name="gateway / SecurityConfig.java"><code>@Configuration
+@EnableWebFluxSecurity
+class BffSecurityConfig {
+
+  @Bean
+  SecurityWebFilterChain chain(ServerHttpSecurity http) {
+    return http
+      .authorizeExchange(a -&gt; a.anyExchange().authenticated())
+      .oauth2Login(Customizer.withDefaults())     <span class="c">// chạy Authorization Code, giữ token trong phiên</span>
+      .csrf(c -&gt; c.csrfTokenRepository(
+          CookieServerCsrfTokenRepository.withHttpOnlyFalse()))
+      .build();
+  }
+}</code></pre>
+<div class="callout warn"><span class="t">Hai điểm cần đối chiếu tài liệu</span>
+<p><b>CSRF cho SPA:</b> từ Spring Security 6 trở đi, cách cấu hình request handler và việc cookie <code>XSRF-TOKEN</code> được phát ra thay đổi (có nhiều bẫy với WebFlux). Xem mục "CSRF for Single Page Applications" trong reference docs của đúng phiên bản bạn dùng. Demo chỉ gọi <code>GET</code> nên chưa chạm tới vấn đề này.</p>
+<p><b>PKCE cho confidential client:</b> OAuth 2.1 khuyến nghị bật PKCE cả khi đã có secret. Spring Security có customizer sẵn cho việc này (<code>OAuth2AuthorizationRequestCustomizers.withPkce()</code>); hãy xác nhận cách gắn vào resolver trong docs phiên bản của bạn.</p></div>
+<h3>10.3 React không còn thư viện OIDC</h3>
+<p>Nhờ BFF, phía React đơn giản đi nhiều: gọi API bằng cookie sẵn có, không lưu token, không refresh.</p>
+<pre data-name="spa / src/App.jsx (cách B)"><code>import { useState } from "react";
+
+export default function App() {
+  const [data, setData] = useState(null);
+
+  const callApi = async () =&gt; {
+    const res = await fetch("/api/products", { credentials: "same-origin" });
+    if (res.status === 401) {
+      window.location.href = "/oauth2/authorization/keycloak"; <span class="c">// đăng nhập</span>
+      return;
+    }
+    setData(await res.json());
+  };
+
+  return (
+    &lt;div&gt;
+      &lt;button onClick={callApi}&gt;Gọi /api/products&lt;/button&gt;
+      &lt;pre&gt;{JSON.stringify(data, null, 2)}&lt;/pre&gt;
+    &lt;/div&gt;
+  );
+}</code></pre>
+<p>Để cùng origin, build React rồi để Gateway phục vụ file tĩnh:</p>
+<pre data-name="Terminal"><code>npm run build
+<span class="c"># chép nội dung thư mục dist/ vào gateway/src/main/resources/static/</span></code></pre>
+<h3>10.4 Chạy và so sánh với cách A</h3>
+<ol class="flow">
+<li>Mở <code>http://localhost:8080</code>. Gateway chuyển bạn sang Keycloak để đăng nhập (do <code>anyExchange().authenticated()</code>).</li>
+<li>Đăng nhập <code>alice</code>. Network tab cho thấy Keycloak redirect về <code>/login/oauth2/code/keycloak?code=...</code> ở <b>Gateway</b>, không phải React.</li>
+<li>Bấm <b>Gọi /api/products</b>. Request chỉ mang <code>Cookie: SESSION=...</code>, <b>không có</b> <code>Authorization</code>.</li>
+<li>Mở <b>Application → Cookies</b>. Cookie phiên có cờ <code>HttpOnly</code>. <b>Session Storage trống</b>: token không có trong trình duyệt.</li>
+<li>Bật log mức DEBUG phía Product Service hoặc in header: service vẫn nhận <code>Authorization: Bearer ...</code> do <code>TokenRelay</code> gắn. Người dùng vẫn được nhận diện là <code>alice</code>.</li>
+</ol>
+<div class="callout ok"><span class="t">Kết quả cần đạt</span>
+<p>Sinh viên trả lời được: token ở đâu (trên Gateway), trình duyệt giữ gì (cookie <code>HttpOnly</code>), và vì sao chạy nhiều Gateway cần Redis cho phiên.</p></div>
+</section>
+  
+<section id="errors">
+<h2>11. Chẩn đoán sự cố thường gặp</h2>
+<details><summary>Trình duyệt báo lỗi CORS khi gọi Gateway hoặc /token (cách A)</summary>
+<p>Origin của SPA (<code>http://localhost:5173</code>) phải được cho phép ở: (1) Keycloak, qua <i>Web origins</i>; (2) Gateway, qua cấu hình CORS trong Spring Security (preflight <code>OPTIONS</code> bị chặn trước khi tới route nếu chỉ cấu hình CORS trong Gateway mà không bật <code>.cors()</code> ở Security).</p></details>
+<details><summary><code>Invalid parameter: redirect_uri</code></summary>
+<p>URL SPA gửi không khớp với <i>Valid redirect URIs</i> đã đăng ký. Chú ý <code>localhost</code> khác <code>127.0.0.1</code>, và cổng phải đúng.</p></details>
+<details><summary>Có token nhưng Gateway vẫn trả 401</summary>
+<p>Kiểm tra: <code>issuer-uri</code> phải <b>giống hệt</b> claim <code>iss</code> trong token (cùng <code>localhost</code>, cùng cổng). Token hết hạn (<code>exp</code>). Đồng hồ máy lệch quá xa. Gateway không truy cập được Keycloak để lấy JWKS.</p></details>
+<details><summary><code>invalid_grant</code> hoặc <code>PKCE verification failed</code> ở /token</summary>
+<p>Verifier gửi lên không khớp challenge đã lưu: thường do tải lại trang giữa chừng làm mất verifier trong bộ nhớ, hoặc mở nhiều tab đăng nhập cùng lúc. Xóa storage và đăng nhập lại.</p></details>
+<details><summary><code>crypto.subtle is undefined</code></summary>
+<p>Web Crypto chỉ có trên "secure context" (HTTPS hoặc <code>localhost</code>). Nếu demo bằng địa chỉ IP qua HTTP thì thư viện OIDC không băm được.</p></details>
+<details><summary>Cách B: đăng nhập xong nhưng bị đẩy về trang login liên tục</summary>
+<p>Thường do cookie phiên không được lưu (domain/cổng khác nhau giữa lúc đăng nhập và lúc gọi), hoặc nhiều bản Gateway không dùng chung phiên.</p></details>
+<details><summary>Cách B: POST/PUT/DELETE bị 403</summary>
+<p>Thiếu header <code>X-XSRF-TOKEN</code>. Đây là CSRF hoạt động đúng; cần cấu hình phía SPA đọc cookie <code>XSRF-TOKEN</code> và gửi lại trong header.</p></details>
+</section>
+<section id="exercises">
+<h2>12. Bài tập củng cố và mở rộng</h2>
+<ol>
+<li>Sử dụng phòng thí nghiệm ở mục 4.6: giải thích bằng lời vì sao kẻ trộm code không đổi được token dù thấy cả <code>code</code> và <code>code_challenge</code>.</li>
+<li>Cách A: giảm thời hạn access token xuống 1 phút trong Keycloak, quan sát SPA xử lý hết hạn thế nào. Điều gì xảy ra nếu tắt refresh?</li>
+<li>Cách A: gọi thẳng Product Service (cổng 8081) mà không qua Gateway, có và không có token. Vì sao nên để service cũng là Resource Server?</li>
+<li>So sánh A và B: liệt kê 3 thứ kẻ tấn công XSS lấy được ở A nhưng không lấy được ở B.</li>
+<li>Nâng cao: thêm phân quyền RBAC bằng <code>@PreAuthorize("hasRole('ADMIN')")</code> ở Product Service và ánh xạ role từ Keycloak sang authority của Spring.</li>
+</ol>
+</section>
+<section class="appendix" id="glossary">
+<h2>Phụ lục A — Bảng viết tắt</h2>
+<p>Các từ viết tắt sẽ xuất hiện xuyên suốt tài liệu. Bảng này tập hợp các thuật ngữ và viết tắt được sử dụng xuyên suốt giáo trình; các thuật ngữ quan trọng cũng được chú thích trực tiếp tại nơi xuất hiện.</p>
+<div class="scroll">
+<table>
+<thead><tr><th>Viết tắt</th><th>Nghĩa đầy đủ</th><th>Hiểu nhanh</th></tr></thead>
+<tbody>
+<tr><td>API</td><td>Application Programming Interface</td><td>Giao diện để chương trình này gọi chương trình khác (ở đây là REST qua HTTP).</td></tr>
+<tr><td>HTTP / HTTPS</td><td>HyperText Transfer Protocol / HTTP Secure</td><td>Giao thức web. HTTPS là HTTP được mã hóa bằng TLS.</td></tr>
+<tr><td>TLS</td><td>Transport Layer Security</td><td>Lớp mã hóa đường truyền, tạo ra "ổ khóa" trên trình duyệt.</td></tr>
+<tr><td>mTLS</td><td>mutual TLS</td><td>TLS hai chiều: cả client lẫn server đều đưa chứng chỉ để chứng minh danh tính.</td></tr>
+<tr><td>AuthN</td><td>Authentication (xác thực)</td><td>"Bạn là ai?"</td></tr>
+<tr><td>AuthZ</td><td>Authorization (phân quyền)</td><td>"Bạn được làm gì?"</td></tr>
+<tr><td>OAuth 2.0</td><td>Open Authorization 2.0</td><td>Khung chuẩn để một ứng dụng được ủy quyền truy cập tài nguyên mà không biết mật khẩu người dùng.</td></tr>
+<tr><td>OIDC</td><td>OpenID Connect</td><td>Lớp mở rộng trên OAuth 2.0 để biết người dùng là ai (đăng nhập), bổ sung ID Token.</td></tr>
+<tr><td>PKCE</td><td>Proof Key for Code Exchange (đọc là "pixy")</td><td>Cơ chế chứng minh "người đổi code chính là người đã xin code". Xem mục 4.</td></tr>
+<tr><td>SPA</td><td>Single Page Application</td><td>Ứng dụng web một trang (React, Vue, Angular) chạy hoàn toàn trong trình duyệt.</td></tr>
+<tr><td>BFF</td><td>Backend For Frontend</td><td>Một backend nhỏ đứng cạnh frontend, thay frontend làm việc với OAuth và giữ token.</td></tr>
+<tr><td>IdP</td><td>Identity Provider</td><td>Nơi quản lý danh tính và đăng nhập (Keycloak, Auth0, Entra ID...).</td></tr>
+<tr><td>AS</td><td>Authorization Server</td><td>Máy chủ cấp token. Trong OIDC thường trùng với IdP.</td></tr>
+<tr><td>RS</td><td>Resource Server</td><td>Máy chủ giữ dữ liệu/API được bảo vệ, chỉ nhận request có access token hợp lệ.</td></tr>
+<tr><td>JWT</td><td>JSON Web Token (đọc là "jot")</td><td>Token dạng chuỗi gồm 3 phần, tự chứa thông tin và có chữ ký.</td></tr>
+<tr><td>JWK / JWKS</td><td>JSON Web Key / JSON Web Key Set</td><td>Khóa công khai (và danh sách khóa) mà AS công bố để RS kiểm tra chữ ký JWT.</td></tr>
+<tr><td>iss, sub, aud, exp</td><td>issuer, subject, audience, expiration time</td><td>Các trường (claim) trong JWT: ai phát hành, của ai, dành cho ai, hết hạn lúc nào.</td></tr>
+<tr><td>SSO</td><td>Single Sign-On</td><td>Đăng nhập một lần, dùng cho nhiều ứng dụng.</td></tr>
+<tr><td>XSS</td><td>Cross-Site Scripting</td><td>Kẻ tấn công chèn được JavaScript chạy trong trang của bạn.</td></tr>
+<tr><td>CSRF</td><td>Cross-Site Request Forgery</td><td>Trang độc hại lợi dụng cookie có sẵn để bắt trình duyệt gửi request thay người dùng.</td></tr>
+<tr><td>CORS</td><td>Cross-Origin Resource Sharing</td><td>Quy tắc trình duyệt cho phép (hoặc chặn) trang ở origin này gọi API ở origin khác.</td></tr>
+<tr><td>RBAC</td><td>Role-Based Access Control</td><td>Phân quyền theo vai trò (ADMIN, USER...).</td></tr>
+<tr><td>SHA-256</td><td>Secure Hash Algorithm, 256 bit</td><td>Hàm băm một chiều: ra chuỗi 256 bit, không thể suy ngược lại đầu vào.</td></tr>
+<tr><td>CSPRNG</td><td>Cryptographically Secure Pseudo-Random Number Generator</td><td>Bộ sinh số ngẫu nhiên đủ an toàn cho mật mã (<code>crypto.getRandomValues</code>).</td></tr>
+<tr><td>URI / URL</td><td>Uniform Resource Identifier / Locator</td><td>Địa chỉ tài nguyên.</td></tr>
+<tr><td>RFC</td><td>Request for Comments</td><td>Tài liệu chuẩn của IETF (Internet Engineering Task Force).</td></tr>
+<tr><td>BCP</td><td>Best Current Practice</td><td>Loại tài liệu IETF mô tả thực hành tốt nhất hiện tại.</td></tr>
+<tr><td>TTL</td><td>Time To Live</td><td>Thời gian sống của token/phiên.</td></tr>
+<tr><td>SSR</td><td>Server-Side Rendering</td><td>Render trang ở phía server (Next.js...).</td></tr>
+<tr><td>DSL</td><td>Domain-Specific Language</td><td>Cú pháp cấu hình chuyên biệt, ví dụ lambda DSL của Spring Security.</td></tr>
+<tr><td>JDK / YAML</td><td>Java Development Kit / YAML Ain't Markup Language</td><td>Bộ công cụ Java / định dạng file cấu hình <code>application.yml</code>.</td></tr>
+</tbody>
+</table>
+</div>
+</section><section class="appendix" id="refs">
+<h2>Tài liệu tham khảo</h2>
+<ul>
+<li><a href="https://datatracker.ietf.org/doc/html/rfc7636">RFC 7636: Proof Key for Code Exchange (PKCE)</a></li>
+<li><a href="https://datatracker.ietf.org/doc/html/rfc6749">RFC 6749: The OAuth 2.0 Authorization Framework</a></li>
+<li><a href="https://datatracker.ietf.org/doc/html/rfc9700">RFC 9700: Best Current Practice for OAuth 2.0 Security</a></li>
+<li><a href="https://datatracker.ietf.org/doc/html/rfc7519">RFC 7519: JSON Web Token (JWT)</a></li>
+<li>IETF: <i>OAuth 2.0 for Browser-Based Applications</i> (tìm trên datatracker.ietf.org, có thể đã thành RFC)</li>
+<li><a href="https://openid.net/specs/openid-connect-core-1_0.html">OpenID Connect Core 1.0</a></li>
+<li><a href="https://docs.spring.io/spring-security/reference/">Spring Security Reference</a> và <a href="https://docs.spring.io/spring-cloud-gateway/reference/">Spring Cloud Gateway Reference</a></li>
+</ul>
+<div class="callout warn"><span class="t">Về phiên bản</span>
+<p>Các đoạn cấu hình Spring (tên starter, tiền tố <code>spring.cloud.gateway.server.webflux</code>, cấu hình CSRF cho SPA, tên menu Keycloak) nên được đối chiếu với tài liệu của đúng phiên bản Spring Security 7 và Spring Cloud 2025.1.x bạn dùng trước khi đưa vào giáo trình.</p></div>
+</section>
+<footer>Giáo trình: Bảo mật Microservice · OAuth 2.0/OIDC · PKCE · SPA Public Client · BFF</footer>
+</main>
+</div>
+<script>
+(function(){
+  var $ = function(id){return document.getElementById(id)};
+  var enc = new TextEncoder();
+  var hasCrypto = !!(window.crypto && crypto.subtle);
+  if(!hasCrypto){ $('lab-warn').hidden = false; }
+
+  function b64url(buf){
+    var bytes = new Uint8Array(buf), s = '';
+    for(var i=0;i<bytes.length;i++) s += String.fromCharCode(bytes[i]);
+    return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+  }
+  async function s256(str){
+    var d = await crypto.subtle.digest('SHA-256', enc.encode(str));
+    return b64url(d);
+  }
+  function esc(t){return t.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+
+  var st = {verifier:'', challenge:'', code:'', stored:''};
+
+  $('b1').onclick = function(){
+    if(!hasCrypto) return;
+    st.verifier = b64url(crypto.getRandomValues(new Uint8Array(32)));
+    st.challenge = ''; st.code = ''; st.stored = '';
+    $('o1').innerHTML = '<span class="v">' + st.verifier + '</span>  (' + st.verifier.length + ' ký tự, chỉ SPA biết)';
+    $('o2').innerHTML = ''; $('o3').innerHTML = ''; $('o4').innerHTML = '';
+    $('b2').disabled = false; $('b3').disabled = true; $('b4').disabled = true;
+  };
+
+  $('b2').onclick = async function(){
+    st.challenge = await s256(st.verifier);
+    $('o2').innerHTML = 'SHA-256(verifier) → BASE64URL\n<span class="h">' + st.challenge + '</span>';
+    $('b3').disabled = false;
+  };
+
+  $('b3').onclick = function(){
+    st.code = b64url(crypto.getRandomValues(new Uint8Array(16)));
+    st.stored = st.challenge;
+    $('o3').innerHTML =
+      '<b>① Trình duyệt → Auth Server (URL, ai cũng có thể thấy):</b><br>' +
+      '/authorize?response_type=code&amp;client_id=react-spa&amp;<span class="h">code_challenge=' + st.challenge + '</span>&amp;code_challenge_method=S256<br><br>' +
+      '<b>② Auth Server → Trình duyệt (URL, code có thể bị lộ):</b><br>' +
+      'redirect_uri?<span class="p">code=' + st.code + '</span><br><br>' +
+      '<b>③ Bộ nhớ của Auth Server:</b><br>' +
+      '<span class="p">' + st.code + '</span>  →  <span class="h">' + st.stored + '</span>';
+    $('b4').disabled = false;
+    $('o4').innerHTML = '';
+  };
+
+  $('b4').onclick = async function(){
+    var who = document.querySelector('input[name=who]:checked').value, sent = '', label = '';
+    if(who === 'real'){ sent = st.verifier; label = 'SPA thật'; }
+    else if(who === 'guess'){ sent = b64url(crypto.getRandomValues(new Uint8Array(32))); label = 'Kẻ trộm code (đoán bừa)'; }
+    else if(who === 'none'){ sent = ''; label = 'Kẻ trộm code (không có verifier)'; }
+    else { sent = $('custom').value; label = 'Verifier tự nhập'; }
+
+    var calc = await s256(sent);
+    var ok = (sent !== '' && calc === st.stored);
+    var html = '<div class="out">POST /token\n  grant_type=authorization_code\n  <span class="p">code=' + st.code + '</span>\n  code_verifier=<span class="v">' + (sent ? esc(sent) : '(trống)') + '</span>\n\n' +
+      'Auth Server tính: SHA-256 → BASE64URL\n<span class="h">' + calc + '</span>\n' +
+      'So với challenge đã lưu:\n<span class="h">' + st.stored + '</span></div>';
+    if(ok){
+      html += '<div class="result ok">' + label + ': khớp. Auth Server cấp access token.<small>Người giữ verifier gốc chứng minh được mình chính là bên đã xin code.</small></div>';
+    } else {
+      html += '<div class="result bad">' + label + ': không khớp. Auth Server trả lỗi <code>invalid_grant</code>.<small>Có code trong tay nhưng thiếu verifier gốc nên không đổi được token. Đây chính là tác dụng của PKCE.</small></div>';
+    }
+    $('o4').innerHTML = html;
+  };
+
+  async function freeHash(){
+    if(!hasCrypto) return;
+    var v = $('free').value;
+    var h = await s256(v);
+    $('o5').innerHTML = 'SHA-256 → BASE64URL\n<span class="h">' + h + '</span>';
+    return h;
+  }
+  $('free').addEventListener('input', function(){ $('o6').innerHTML=''; freeHash(); });
+  freeHash();
+
+  $('rfc').onclick = async function(){
+    if(!hasCrypto) return;
+    var verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
+    var expected = 'E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM';
+    $('free').value = verifier;
+    var h = await freeHash();
+    var match = (h === expected);
+    $('o6').innerHTML = '<div class="result ' + (match ? 'ok' : 'bad') + '">' +
+      (match ? 'Khớp với ví dụ trong phụ lục của RFC 7636.' : 'Không khớp ví dụ RFC. Kiểm tra lại.') +
+      '<small>Challenge kỳ vọng: ' + expected + '</small></div>';
+  };
+})();
+</script>
+</body>
+</html>
