@@ -1,56 +1,81 @@
+import java.io.RandomAccessFile;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-/**
- * Ban N request phan tich CV CUNG LUC, sau 1s goi /quick-list (HR xem danh sach) va do thoi gian.
- *
- * Chay (Java 21, khong can build):
- *   java demo/BulkheadLoadTest.java without 15   -> khong Bulkhead: quick-list bi treo ~7s
- *   java demo/BulkheadLoadTest.java with 15      -> co Bulkhead:   3 x 200, 12 x 503, quick-list nhanh
- */
+/** Gui N request CUNG LUC qua gateway, dong thoi in log that cua cv-parse-service. Chay: java demo/BulkheadLoadTest.java 15 */
 public class BulkheadLoadTest {
 
-    static final String BASE = "http://localhost:8085/api/v1/cvparses";
-    static final HttpClient CLIENT = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+    // cv-parse-service ghi log ra file nay (logging.file.name trong application.yml)
+    static final String SERVICE_LOG = System.getProperty("user.home") + "/cv-parse-demo.log";
 
     public static void main(String[] args) throws Exception {
-        boolean with = args.length == 0 || !args[0].equals("without");
-        int n = args.length > 1 ? Integer.parseInt(args[1]) : 15;
-        String path = with ? "/analyze/" : "/analyze-no-bulkhead/";
-        System.out.printf("=== %d request phan tich CV cung luc, %s Bulkhead ===%n", n, with ? "CO" : "KHONG");
+        int n = args.length > 0 ? Integer.parseInt(args[0]) : 15;
+        boolean noBulkhead = args.length > 1 && args[1].equals("no-bulkhead");
+        String path = noBulkhead ? "/analyze-no-bulkhead/" : "/analyze/";
+        HttpClient client = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).build();
+        System.out.println("Gui " + n + " request qua gateway, cach nhau 100ms | " + (noBulkhead ? "KHONG co Bulkhead" : "CO Semaphore Bulkhead"));
+        System.out.println("CLIENT  = script gui/nhan | SERVICE = log that cua cv-parse-service (" + SERVICE_LOG + ")");
 
-        long t0 = System.nanoTime();
-        List<CompletableFuture<String>> calls = new ArrayList<>();
-        int[] ok = {0}, rejected = {0};
+        List<CompletableFuture<Void>> calls = new ArrayList<>();
+        Thread tail = new Thread(() -> tailServiceLog(calls));
+        tail.setDaemon(true);
+        tail.start();
+        Thread.sleep(300); // de tail mo file truoc khi gui
+
         for (int i = 1; i <= n; i++) {
             String cvId = String.format("CV-%02d", i);
-            calls.add(CLIENT.sendAsync(get(BASE + path + cvId), HttpResponse.BodyHandlers.ofString())
-                    .thenApply(r -> {
-                        synchronized (ok) { if (r.statusCode() == 200) ok[0]++; else rejected[0]++; }
-                        return String.format("%s -> %d sau %5d ms", cvId, r.statusCode(), ms(t0));
+            HttpRequest req = HttpRequest.newBuilder(URI.create("http://localhost:8080/api/v1/cvparses" + path + cvId)).build();
+            System.out.printf("[%s] CLIENT  -> %s gui request%n", now(), cvId);
+            calls.add(client.sendAsync(req, HttpResponse.BodyHandlers.ofString())
+                    .thenAccept(r -> System.out.printf("[%s] CLIENT  <- %s %d | %s%n", now(), cvId, r.statusCode(), explain(r)))
+                    .exceptionally(e -> {
+                        System.out.println(cvId + " LOI KET NOI (gateway chua chay?): " + e.getCause());
+                        return null;
                     }));
+            Thread.sleep(100); // gui cach nhau 100ms: moi lan lay / tra permit tach rieng, log de doc
         }
-
-        Thread.sleep(1000); // de cac request CV chiem cho truoc
-        long t1 = System.nanoTime();
-        HttpResponse<String> light = CLIENT.send(get(BASE + "/quick-list"), HttpResponse.BodyHandlers.ofString());
-        System.out.printf("[HR quick-list] -> %d sau %d ms  <== chuc nang khong lien quan%n", light.statusCode(), ms(t1));
-
-        calls.forEach(c -> System.out.println(c.join()));
-        System.out.printf("Tong ket: %d thanh cong, %d bi tu choi, tong %d ms%n", ok[0], rejected[0], ms(t0));
+        CompletableFuture.allOf(calls.toArray(CompletableFuture[]::new)).join();
+        Thread.sleep(500); // cho tail in not dong cuoi
     }
 
-    static HttpRequest get(String url) {
-        return HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(60)).GET().build();
+    // Doc phan moi ghi them vao file log cua service, in cac dong demo ([CV-..])
+    static void tailServiceLog(List<CompletableFuture<Void>> calls) {
+        try (RandomAccessFile f = new RandomAccessFile(SERVICE_LOG, "r")) {
+            long pos = f.length(); // bo qua log cu
+            while (true) {
+                if (f.length() > pos) {
+                    f.seek(pos);
+                    byte[] buf = new byte[(int) (f.length() - pos)];
+                    f.readFully(buf);
+                    pos += buf.length;
+                    for (String line : new String(buf, StandardCharsets.UTF_8).split("\r?\n")) {
+                        int msg = line.indexOf("[CV-");
+                        if (msg >= 0) System.out.printf("[%s] SERVICE    %s%n", line.length() > 23 ? line.substring(11, 23) : "", line.substring(msg));
+                    }
+                }
+                Thread.sleep(100);
+            }
+        } catch (java.io.FileNotFoundException e) {
+            System.out.println("KHONG THAY FILE LOG " + SERVICE_LOG + " -> restart cv-parse-service (can logging.file.name trong application.yml)");
+        } catch (Exception ignored) {
+        }
     }
 
-    static long ms(long start) {
-        return (System.nanoTime() - start) / 1_000_000;
+    static String now() {
+        return java.time.LocalTime.now().format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss.SSS"));
+    }
+
+    // 200 va 503-do-Bulkhead: service da ghi san ly do trong body. Con lai la loi tu gateway/service, khong phai Bulkhead.
+    static String explain(HttpResponse<String> r) {
+        String body = r.body();
+        if (r.statusCode() == 200 || body.startsWith("BULKHEAD")) return body;
+        return "KHONG PHAI DO BULKHEAD (request chua toi duoc Bulkhead) - " + (r.statusCode() == 503
+                ? "gateway khong tim thay cv-parse-service tren Eureka (service chua chay/chua dang ky): " : "loi: ") + body;
     }
 }

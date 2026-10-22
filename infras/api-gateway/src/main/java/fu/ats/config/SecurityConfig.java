@@ -21,6 +21,7 @@ public class SecurityConfig {
                 .authorizeExchange(ex -> ex
                         .pathMatchers(HttpMethod.OPTIONS).permitAll()
                         .pathMatchers("/actuator/health").permitAll()
+                        .pathMatchers("/api/v1/cvparses/**").permitAll()
                         .anyExchange().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
                 .build();

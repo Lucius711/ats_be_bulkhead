@@ -1,8 +1,5 @@
 server:
-  port: 8085            # khop route cv-parse-service trong api-gateway
-  tomcat:
-    threads:
-      max: 10           # DEMO: thu nho tu 200 -> 10 de thay ro hien tuong can thread (25 CV/s x 8s = 200 thread)
+  port: 8085
 
 spring:
   application:
@@ -10,8 +7,8 @@ spring:
 
   datasource:
     url: jdbc:postgresql://localhost:5432/ats_cvs_dbs
-    username: dieunt
-    password:
+    username: postgres
+    password: postgres
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -36,23 +33,30 @@ spring:
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
 
-# ============================================================
-# BULKHEAD (Semaphore) - phan demo
-# ============================================================
 resilience4j:
   bulkhead:
     instances:
-      cvAnalysis:
-        maxConcurrentCalls: 3        # toi da 3 CV duoc phan tich dong thoi
-        maxWaitDuration: 0ms         # het permit -> tu choi ngay (doi thanh 2s de demo "cho co dieu kien")
-        eventConsumerBufferSize: 50  # de /actuator/bulkheadevents co du lieu
+      cvParse:
+        maxConcurrentCalls: 5
+        maxWaitDuration: 5s
 
 management:
   endpoints:
     web:
       exposure:
-        include: health,bulkheads,bulkheadevents,metrics
+        include: health,bulkheads,metrics
 
-demo:
-  cv-analysis:
-    delay-ms: 8000   # gia lap OCR/AI mat 8 giay moi CV
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+logging:
+  file:
+    name: ${user.home}/cv-parse-demo.log
