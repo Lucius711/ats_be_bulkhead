@@ -1,0 +1,40 @@
+server:
+  port: ${CONFIG_SERVER_PORT:${SERVER_PORT:8888}}
+
+spring:
+  application:
+    name: config-server
+
+  # Spring Boot reads the root .env as a properties file. The import is
+  # optional so the application still starts when .env is not present.
+  config:
+    import: optional:file:${ENV_FILE:.env}[.properties]
+
+  profiles:
+    active: ${CONFIG_SERVER_PROFILE:native}
+
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: ${CONFIG_REPO_PATH:file:./config-repo}
+
+        # Nếu muốn dùng Git backend thật, đổi CONFIG_SERVER_PROFILE=git
+        # và bật cấu hình tương ứng bên dưới.
+        # git:
+        #   uri: ${CONFIG_GIT_URI}
+        #   default-label: ${CONFIG_GIT_LABEL:main}
+        #   search-paths: ${CONFIG_GIT_SEARCH_PATHS:config-repo}
+        #   clone-on-start: true
+        #   refresh-rate: 60
+        #   username: ${CONFIG_GIT_USERNAME:}
+        #   password: ${CONFIG_GIT_PASSWORD:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never

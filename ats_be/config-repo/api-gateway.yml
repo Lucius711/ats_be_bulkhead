@@ -1,0 +1,39 @@
+server:
+  port: ${API_GATEWAY_PORT:8080}
+
+spring:
+  cloud:
+    gateway:
+      server:
+        webflux:
+          routes:
+            - id: job-service
+              uri: lb://job-service
+              predicates:
+                - Path=/api/v1/jobs/**
+            - id: candidate-service
+              uri: lb://candidate-service
+              predicates:
+                - Path=/api/v1/candidates/**
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications
+            - id: application-service
+              uri: lb://application-service
+              predicates:
+                - Path=/api/v1/applications/**
+            - id: cv-parse-service
+              uri: lb://cv-parse-service
+              predicates:
+                - Path=/api/v1/cvparses/**
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/ats}
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.cloud.gateway: DEBUG

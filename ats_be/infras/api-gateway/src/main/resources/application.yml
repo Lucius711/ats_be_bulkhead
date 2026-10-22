@@ -1,8 +1,12 @@
 server:
-  port: 8080
+  port: ${API_GATEWAY_PORT:8080}
 spring:
   application:
     name: api-gateway
+  config:
+    import:
+      - optional:file:${ENV_FILE:.env}[.properties]
+      - optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
   cloud:
     gateway:
       server:
@@ -40,34 +44,37 @@ spring:
                 - Path=/api/v1/cvparses/**
   security:
     oauth2:
-      client:
-        registration:
-          google:
-            client-id: ${GOOGLE_CLIENT_ID}  # THAY THẾ BẰNG CLIENT ID CỦA BẠN TỪ GOOGLE CLOUD CONSOLE
-            client-secret: ${GOOGLE_CLIENT_SECRET} # THAY THẾ BẰNG CLIENT SECRET CỦA BẠN TỪ GOOGLE CLOUD CONSOLE
-            scope:
-              - openid # Yêu cầu ID Token (định danh người dùng)
-              - profile # Yêu cầu thông tin hồ sơ cơ bản (tên, ảnh)
-              - email # Yêu cầu địa chỉ email
-            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}" # URI chuyển hướng sau khi xác thực thành công
-            # Lưu ý: redirect-uri này phải khớp với URI đã đăng ký trong Google Cloud Console
-            # Đối với demo, nó sẽ là http://localhost:8080/login/oauth2/code/google
-        provider:
-          google:
-            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth # Endpoint ủy quyền của Google
-            token-uri: https://oauth2.googleapis.com/token # Endpoint lấy token của Google
-            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo # Endpoint thông tin người dùng của Google
-            jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs # Endpoint JWK Set của Google
-      #          facebook:
-
       resourceserver:
         jwt:
-          issuer-uri: https://accounts.google.com
+#          issuer-uri: https://accounts.google.com
+#          audiences:
+#            - $GOOGLE_CLIENT_ID}
+          issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/ats}
+
+#     Đoạn cấu hình này dành cho trường hợp API Gateway đóng vai trò OAuth2 Client
+#      client:
+#        registration:
+#          google:
+#            client-id: ${GOOGLE_CLIENT_ID}
+#            client-secret: ${GOOGLE_CLIENT_SECRET}
+#            scope:
+#              - openid # Yêu cầu ID Token (định danh người dùng)
+#              - profile # Yêu cầu thông tin hồ sơ cơ bản (tên, ảnh)
+#              - email # Yêu cầu địa chỉ email
+#            redirect-uri: "{baseUrl}/login/oauth2/code/{registrationId}" # URI chuyển hướng sau khi xác thực thành công
+#            # Lưu ý: redirect-uri này phải khớp với URI đã đăng ký trong Google Cloud Console
+#            # Đối với demo, nó sẽ là http://localhost:8080/login/oauth2/code/google
+#        provider:
+#          google:
+#            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth # Endpoint ủy quyền của Google
+#            token-uri: https://oauth2.googleapis.com/token # Endpoint lấy token của Google
+#            user-info-uri: https://www.googleapis.com/oauth2/v3/userinfo # Endpoint thông tin người dùng của Google
+#            jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs # Endpoint JWK Set của Google
 
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/  # Địa chỉ Eureka Server
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}  # Địa chỉ Eureka Server
     fetch-registry: true      # Tải registry về local cache
     register-with-eureka: true  # Đăng ký bản thân vào registry
   instance:

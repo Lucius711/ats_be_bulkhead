@@ -1,14 +1,16 @@
 server:
-  port: 8083
+  port: ${CV_PARSE_SERVICE_PORT:8083}
 
 spring:
   application:
     name: job-service
+  config:
+    import: optional:file:${ENV_FILE:.env}[.properties]
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ats_cvs_dbs
-    username: dieunt
-    password:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${CV_PARSE_DB_NAME:ats_cvs_dbs}
+    username: ${DB_USERNAME:dieunt}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
     hikari:

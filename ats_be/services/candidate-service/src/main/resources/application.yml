@@ -1,14 +1,18 @@
 server:
-  port: 8082
+  port: ${CANDIDATE_SERVICE_PORT:8082}
 
 spring:
   application:
     name: candidate-service
+  config:
+    import:
+      - optional:file:${ENV_FILE:.env}[.properties]
+      - optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/ats_candidate_dbs
-    username: dieunt
-    password:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${CANDIDATE_DB_NAME:ats_candidate_dbs}
+    username: ${DB_USERNAME:dieunt}
+    password: ${DB_PASSWORD:}
     driver-class-name: org.postgresql.Driver
 
     hikari:
@@ -35,7 +39,7 @@ spring:
 eureka:
   client:
     service-url:
-      defaultZone: http://localhost:8761/eureka/  # Địa chỉ Eureka Server
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}  # Địa chỉ Eureka Server
     fetch-registry: true      # Tải registry về local cache
     register-with-eureka: true  # Đăng ký bản thân vào registry
   instance:

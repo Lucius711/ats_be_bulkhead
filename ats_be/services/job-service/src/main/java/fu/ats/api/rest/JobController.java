@@ -1,17 +1,19 @@
 package fu.ats.api.rest;
 
 import fu.ats.api.dto.CreateJobRequest;
+import fu.ats.api.dto.CustomUserDetails;
 import fu.ats.api.dto.JobApplicationResponse;
 import fu.ats.application.command.JobCommand;
 import fu.ats.application.port.in.CreateJobPort;
 import fu.ats.domain.aggregate.JobAggregate;
 import fu.ats.infrastructure.persistence.entity.JobStatus;
 import jakarta.validation.Valid;
-import jakarta.ws.rs.HeaderParam;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -28,8 +30,11 @@ public class JobController {
     private final CreateJobPort createJobPort;
 
     @PostMapping
-    public ResponseEntity<?> createJob(@Valid @RequestBody CreateJobRequest request) {
-
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<?> createJob(@Valid @RequestBody CreateJobRequest request,
+                                       @AuthenticationPrincipal CustomUserDetails currentUser) {
+        log.info("Creating job for authenticated user {}", currentUser.getUserId());
+        log.debug("Create job request {}", request);
         JobAggregate jobAggregate = createJobPort.execute(new JobCommand(
                 request.title(),
                 request.description(),
@@ -49,12 +54,14 @@ public class JobController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<JobApplicationResponse> getJob(@Valid @PathVariable("id") UUID id,             @RequestHeader("X-User-Id") String userId,
-                                                         @RequestHeader(value = "X-User-Email", required = false) String email
-    ) {
+    @PreAuthorize("hasAnyRole('RECRUITER', 'CANDIDATE')")
+    public ResponseEntity<JobApplicationResponse> getJob(
+            @Valid @PathVariable("id") UUID id,
+            @AuthenticationPrincipal CustomUserDetails currentUser) {
 
         log.info("getJob {} - {}", port, id);
-        log.info("getJob {} - {}", userId, email);
+        log.info("getJob user {} - {}", currentUser.getUserId(), currentUser.getUsername());
+        log.info("getJob authorities {} - {}", currentUser.getAuthorities(), id);
 
         return ResponseEntity.ok(new JobApplicationResponse(id, "Fullstack Java Dev", JobStatus.PUBLISHED.toString(), LocalDate.of(2026, 12, 31)));
     }

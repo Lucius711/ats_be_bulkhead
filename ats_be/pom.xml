@@ -10,6 +10,7 @@
     <packaging>pom</packaging>
     <modules>
         <module>infras/api-gateway</module>
+        <module>infras/config-server</module>
         <module>services/job-service</module>
         <module>services/candidate-service</module>
         <module>services/application-service</module>
