@@ -1,0 +1,17 @@
+# Profile chỉ dùng khi DEMO bulkhead:  --spring.profiles.active=demo
+# Cố tình để Tomcat ÍT thread để thấy hiện tượng cạn thread với tải nhỏ (40 request).
+# Production mặc định 200 thread -> hiện tượng y hệt, chỉ cần tải lớn hơn.
+server:
+  tomcat:
+    threads:
+      max: 20
+      min-spare: 20
+
+logging:
+  pattern:
+    # In tên thread đủ dài để phân biệt http-nio-8083-exec-* và bulkhead-cvParse-*
+    console: "%d{HH:mm:ss.SSS} %-5level [%-30.30thread] %-22.22logger{0} : %msg%n"
+    file: "%d{HH:mm:ss.SSS} %-5level [%-30.30thread] %-22.22logger{0} : %msg%n"
+  # Ghi thêm ra file để xem lại / grep vòng đời từng request sau khi chạy tải (nằm ngoài repo)
+  file:
+    name: ${user.home}/ats-demo-logs/application-service.log

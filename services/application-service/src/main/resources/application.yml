@@ -47,4 +47,25 @@ eureka:
   instance:
     prefer-ip-address: true # Dùng IP thay hostname - quan trọng trong Docker
     lease-renewal-interval-in-seconds: 10 # Heartbeat mỗi 10s (dev)
-    lease-expiration-duration-in-seconds: 30 # Expiry sau 30s không có heartbeat
+    lease-expiration-duration-in-seconds: 30  # Expiry sau 30s không có heartbeat
+
+# ============================================================
+# BULKHEAD (Resilience4j) - cô lập lời gọi sang cv-parse-service (parse CV chậm ~8s)
+# ============================================================
+resilience4j:
+  # ---- THREAD POOL: có thread pool + hàng đợi RIÊNG, lời gọi chạy trên thread "bulkhead-cvParse-*" ----
+  thread-pool-bulkhead:
+    instances:
+      cvParse:
+        core-thread-pool-size: 3
+        max-thread-pool-size: 5
+        queue-capacity: 6             # => nhận tối đa 5 đang chạy + 6 đang chờ = 11, còn lại bị từ chối
+        keep-alive-duration: 20ms
+
+
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,bulkheads,bulkheadevents

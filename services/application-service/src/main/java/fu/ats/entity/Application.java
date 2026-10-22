@@ -28,6 +28,10 @@ public class Application{
     @Column(name = "cv_id")
     private UUID cvId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "cv_parse_status", length = 20)
+    private CvParseStatus cvParseStatus;
+
     @Column(name = "department_id", columnDefinition = "uuid")
     private UUID departmentId;
 

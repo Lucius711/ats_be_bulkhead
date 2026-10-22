@@ -1,6 +1,7 @@
 package fu.ats.exception;
 
 import fu.ats.dto.ApiError;
+import io.github.resilience4j.bulkhead.BulkheadFullException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -34,6 +35,13 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
+    /** Lưới an toàn: BulkheadFullException lọt ra mà không qua fallback -> vẫn trả 503 thay vì 500. */
+    @ExceptionHandler(BulkheadFullException.class)
+    public ResponseEntity<ApiError> handleBulkheadFull(BulkheadFullException ex, HttpServletRequest request) {
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
+                .body(new ApiError("DEPENDENCY_BUSY", ex.getMessage(), OffsetDateTime.now(), request.getRequestURI()));
+    }
+
     @ExceptionHandler(DownstreamException.class)
     public ResponseEntity<ApiError> handleDownstreamException(
             DownstreamException ex,
@@ -52,6 +60,11 @@ public class GlobalExceptionHandler {
                 status = HttpStatus.NOT_FOUND;
                 code = "APPLICATION_JOB_NOT_FOUND";
                 message = "The requested job does not exist";
+            }
+            case ServiceBusyException.ERROR_CODE -> {
+                status = HttpStatus.SERVICE_UNAVAILABLE;
+                code = "DEPENDENCY_BUSY";
+                message = ex.getService() + " is overloaded, request rejected by bulkhead. Please retry later";
             }
             case "JOB_CLOSED" -> {
                 status = HttpStatus.CONFLICT;
