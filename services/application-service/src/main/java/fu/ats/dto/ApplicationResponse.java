@@ -1,6 +1,7 @@
 package fu.ats.dto;
 
 import fu.ats.entity.ApplicationStatus;
+import fu.ats.entity.CvParseStatus;
 import lombok.*;
 
 import java.time.OffsetDateTime;
@@ -23,6 +24,8 @@ public class ApplicationResponse {
     private CandidateView candidate;
 
     private UUID cvId;
+
+    private CvParseStatus cvParseStatus;
 
     private UUID departmentId;
 

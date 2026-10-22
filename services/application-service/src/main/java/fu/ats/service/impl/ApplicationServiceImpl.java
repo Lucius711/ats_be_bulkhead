@@ -10,12 +10,14 @@ import fu.ats.dto.CandidateView;
 import fu.ats.dto.JobView;
 import fu.ats.entity.Application;
 import fu.ats.entity.ApplicationStatus;
+import fu.ats.entity.CvParseStatus;
 import fu.ats.entity.PipelineStage;
 import fu.ats.exception.BusinessException;
 import fu.ats.exception.ResourceNotFoundException;
 import fu.ats.repository.ApplicationRepository;
 import fu.ats.repository.PipelineStageRepository;
 import fu.ats.service.ApplicationService;
+import fu.ats.service.CvParseDispatcher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +37,7 @@ public class ApplicationServiceImpl implements ApplicationService {
     private final ApplicationRepository applicationRepository;
     private final JobClient jobClient;
     private final CandidateClient candidateClient;
+    private final CvParseDispatcher cvParseDispatcher;
 
     @Override
     @Transactional
@@ -64,8 +67,11 @@ public class ApplicationServiceImpl implements ApplicationService {
         application.setPipelineStage(pipelineStages.get(0));
 
         application.setCvId(UUID.randomUUID());
+        application.setCvParseStatus(CvParseStatus.PENDING);
 
         Application savedApplication = applicationRepository.save(application);
+        // Parse CV chay NEN qua ThreadPool Bulkhead: nop ho so khong cho cv-parse-service (cham ~8s)
+        cvParseDispatcher.dispatchAfterCommit(savedApplication.getId(), savedApplication.getCvId());
         return mapToResponse(savedApplication, candidate);
     }
 
@@ -107,6 +113,7 @@ public class ApplicationServiceImpl implements ApplicationService {
                 .candidateId(application.getCandidateId())
                 .candidate(candidate)
                 .cvId(application.getCvId())
+                .cvParseStatus(application.getCvParseStatus())
                 .departmentId(application.getDepartmentId())
                 .transferredFrom(application.getTransferredFrom())
                 .pipelineStageId(application.getPipelineStage() != null ? application.getPipelineStage().getId() : null)
