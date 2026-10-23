@@ -1,0 +1,27 @@
+# Profile chỉ dùng khi DEMO bulkhead:  Active profiles = demo
+# Cố tình để Tomcat ÍT thread để thấy hiện tượng cạn thread với tải nhỏ (40 request).
+server:
+  tomcat:
+    threads:
+      max: 20
+      min-spare: 20
+    mbeanregistry:
+      enabled: true          # bật metric tomcat.threads.busy (số thread Tomcat đang bận)
+
+# Actuator chạy trên Tomcat RIÊNG ở cổng 8086 -> vẫn đọc được số liệu khi Tomcat chính (8085) đã cạn thread
+management:
+  server:
+    port: 8086
+  endpoints:
+    web:
+      exposure:
+        include: health,bulkheads,metrics,bulkheaddemo   # bulkheaddemo: bắn tải cho trang /bulkhead-demo.html
+      cors:
+        allowed-origin-patterns: "http://localhost:*"     # trang ở :8085 gọi actuator ở :8086
+        allowed-methods: GET,POST
+        allowed-headers: "*"                               # POST gửi kèm Content-Type: application/json
+
+spring:
+  mvc:
+    async:
+      request-timeout: 60s   # request ThreadPool xếp hàng có thể mất ~24s, mặc định Tomcat chỉ 30s

@@ -13,6 +13,11 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.LocalTime;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/cvparses")
@@ -46,6 +51,49 @@ public class CvParseController {
         } finally {
             MDC.remove("cvId");
         }
+    }
+
+    /**
+     * ThreadPool bulkhead: tra ve CompletableFuture -> Spring MVC xu ly bat dong bo,
+     * thread Tomcat duoc tra ve ngay, CV duoc parse tren pool rieng "bulkhead-cvParsePool-*".
+     */
+    @GetMapping("/analyze-threadpool/{cvId}")
+    public CompletableFuture<ResponseEntity<String>> analyzeThreadPool(@PathVariable("cvId") String cvId) throws InterruptedException {
+        long start = System.currentTimeMillis();
+        MDC.put("cvId", cvId);
+        log.info("[{}] (1) DEN SERVICE tren {}, gui vao pool cvParsePool", cvId, Thread.currentThread().getName());
+        try {
+            return cvParseService.parseOnThreadPool(cvId)
+                    .thenApply(processMs -> {
+                        long total = System.currentTimeMillis() - start;
+                        String msg = String.format("%s XU LY XONG sau %d ms = cho trong hang doi %d ms + xu ly %d ms",
+                                cvId, total, total - processMs, processMs);
+                        log.info("[{}] (4) TRA VE 200 | {}", cvId, msg);
+                        return ResponseEntity.ok(msg);
+                    })
+                    .exceptionally(error -> poolBusy(cvId, start, error));
+        } catch (BulkheadFullException e) {
+            return CompletableFuture.completedFuture(poolBusy(cvId, start, e));
+        } finally {
+            MDC.remove("cvId");
+        }
+    }
+
+    private ResponseEntity<String> poolBusy(String cvId, long start, Throwable error) {
+        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+        if (!(cause instanceof BulkheadFullException)) {
+            throw new CompletionException(cause);
+        }
+        String msg = String.format("BULKHEAD THREADPOOL: %s BI TU CHOI NGAY sau %d ms - pool va hang doi deu day",
+                cvId, System.currentTimeMillis() - start);
+        log.warn("[{}] (4) TRA VE 503 | {}", cvId, msg);
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).body(msg);
+    }
+
+    /** Chuc nang nhe, KHONG parse CV - thuoc do "cv-parse-service con phuc vu duoc viec khac khong?" */
+    @GetMapping("/ping")
+    public Map<String, String> ping() {
+        return Map.of("pong", LocalTime.now().toString(), "thread", Thread.currentThread().getName());
     }
 
     @GetMapping("/analyze-no-bulkhead/{cvId}")
