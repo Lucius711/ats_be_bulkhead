@@ -40,6 +40,14 @@ resilience4j:
         maxConcurrentCalls: 5
         maxWaitDuration: 5s
 
+  thread-pool-bulkhead:
+    instances:
+      cvParsePool:
+        coreThreadPoolSize: 3
+        maxThreadPoolSize: 5
+        queueCapacity: 6
+        keepAliveDuration: 20ms
+
 management:
   endpoints:
     web:

@@ -1,0 +1,286 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bulkhead demo – cv-parse-service</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #667085; --line: #e3e6eb;
+    --free: #eef0f3; --tomcat: #e8590c; --sema: #7048e8; --pool: #1971c2; --queue: #f2b705;
+    --wait: #c92a2a; --ok: #2f9e44; --bad: #e03131;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  h2 { font-size: 16px; margin: 0 0 10px; display: flex; justify-content: space-between; gap: 8px; }
+  .sub { color: var(--muted); margin: 0 0 16px; }
+  code { background: var(--free); padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 16px; }
+  .controls input { width: 70px; padding: 8px; border: 1px solid var(--line); border-radius: 8px; font-size: 15px; }
+  button { border: 0; border-radius: 8px; padding: 10px 16px; font-size: 15px; font-weight: 600; color: #fff; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  button[data-mode="no-bulkhead"] { background: #495057; }
+  button[data-mode="semaphore"] { background: var(--sema); }
+  button[data-mode="thread-pool"] { background: var(--pool); }
+  #msg { color: var(--muted); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 14px; margin-bottom: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-bottom: 14px; }
+  .grid .card { margin-bottom: 0; }
+  .hint { color: var(--muted); font-size: 13px; margin: 8px 0 0; }
+  .label { font-size: 13px; color: var(--muted); margin: 10px 0 6px; }
+  .slots { display: flex; flex-wrap: wrap; gap: 5px; min-height: 26px; }
+  .slot { width: 24px; height: 24px; border-radius: 5px; background: var(--free); transition: background .2s; }
+  .slot.tomcat { background: var(--tomcat); }
+  .slot.sema { background: var(--sema); }
+  .slot.wait { background: var(--wait); }
+  .slot.pool { background: var(--pool); }
+  .slot.queue { background: var(--queue); }
+  .big { font-size: 42px; font-weight: 700; line-height: 1.1; }
+  .big small { font-size: 15px; font-weight: 500; color: var(--muted); }
+  .good { color: var(--ok); } .warn { color: #e67700; } .badc { color: var(--bad); }
+  svg { width: 100%; height: 90px; display: block; margin-top: 6px; }
+  .reqs { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 5px; }
+  .req { height: 34px; border-radius: 6px; background: var(--free); font-size: 11px; color: var(--muted);
+         display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; }
+  .req.ok { background: var(--ok); color: #fff; } .req.bad { background: var(--bad); color: #fff; }
+  .req.err { background: #343a40; color: #fff; }
+  .req.pending { animation: pulse 1.2s infinite; }
+  @keyframes pulse { 50% { opacity: .45; } }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 10px; }
+  .legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th { color: var(--muted); font-weight: 600; }
+  .tablewrap { overflow-x: auto; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Semaphore vs ThreadPool – cv-parse-service</h1>
+  <p class="sub">Mỗi CV parse ~8 giây. Bắn N CV cùng lúc và xem tài nguyên của service thay đổi theo thời gian thực.</p>
+
+  <div class="controls">
+    <label>Số CV <input id="n" type="number" value="40" min="1" max="200"></label>
+    <button data-mode="no-bulkhead">Không bulkhead</button>
+    <button data-mode="semaphore">Semaphore</button>
+    <button data-mode="thread-pool">ThreadPool</button>
+    <span id="msg">Sẵn sàng.</span>
+  </div>
+
+  <div class="grid">
+    <section class="card">
+      <h2><span>/ping – chức năng khác</span><span id="pingState"></span></h2>
+      <div id="pingNow" class="big">–</div>
+      <svg id="pingChart" viewBox="0 0 300 90" preserveAspectRatio="none"></svg>
+      <p class="hint">Trình duyệt gọi <code>/ping</code> liên tục (không parse CV). Càng cao = service càng "treo".</p>
+    </section>
+
+    <section class="card">
+      <h2><span>Thread Tomcat</span><span id="tomcatTxt"></span></h2>
+      <div id="tomcat" class="slots"></div>
+      <p class="hint">Thread phục vụ MỌI request của service – kể cả <code>/ping</code>. Hết thread = service treo.</p>
+    </section>
+
+    <section class="card">
+      <h2><span>Semaphore <code>cvParse</code></span><span id="semaTxt"></span></h2>
+      <div class="label">Permit đang dùng = CV đang parse (trên thread Tomcat)</div>
+      <div id="sema" class="slots"></div>
+      <div class="label">Thread Tomcat đứng CHỜ permit (vẫn giữ thread) <b id="semaWaitTxt"></b></div>
+      <div id="semaWait" class="slots"></div>
+    </section>
+
+    <section class="card">
+      <h2><span>ThreadPool <code>cvParsePool</code></span><span id="poolTxt"></span></h2>
+      <div class="label">Worker riêng = CV đang parse (không dùng thread Tomcat)</div>
+      <div id="pool" class="slots"></div>
+      <div class="label">Hàng đợi (KHÔNG giữ thread Tomcat) <b id="queueTxt"></b></div>
+      <div id="queue" class="slots"></div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2><span>Kết quả từng CV</span><span id="runTxt"></span></h2>
+    <div id="reqs" class="reqs"></div>
+    <div class="legend">
+      <span><i style="background:var(--free)"></i>đang chờ phản hồi</span>
+      <span><i style="background:var(--ok)"></i>200 – parse xong</span>
+      <span><i style="background:var(--bad)"></i>503 – bị bulkhead từ chối</span>
+      <span>Số dưới ô = thời gian phản hồi (giây)</span>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2><span>So sánh các lượt chạy</span></h2>
+    <div class="tablewrap">
+      <table id="cmp">
+        <thead><tr>
+          <th>Chế độ</th><th>/ping chậm nhất</th><th>Thread Tomcat bận (đỉnh)</th><th>CV parse cùng lúc (đỉnh)</th>
+          <th>CV đang chờ (đỉnh)</th><th>200</th><th>503</th><th>503 trả về sau</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script>
+  // Actuator ở cổng riêng (mặc định 8086); đổi bằng ?mgmt=9186 nếu cần
+  const MGMT = `${location.protocol}//${location.hostname}:${new URLSearchParams(location.search).get('mgmt') || 8086}/actuator/bulkheaddemo`;
+  const PING = '/api/v1/cvparses/ping';
+  const NAMES = { 'no-bulkhead': 'Không bulkhead', 'semaphore': 'Semaphore', 'thread-pool': 'ThreadPool' };
+  const $ = id => document.getElementById(id);
+
+  let live = null, run = null;
+  let peaks = null;               // đỉnh của lượt đang chạy
+  let clickedAt = 0;              // chỉ ghi nhận lượt bắt đầu SAU lần bấm nút gần nhất
+  const pings = [];               // [thời điểm ms, độ trễ ms]
+  let pingStartedAt = null;
+
+  function slots(el, total, filled, cls) {
+    let html = '';
+    for (let i = 0; i < total; i++) html += `<div class="slot ${i < filled ? cls : ''}"></div>`;
+    el.innerHTML = html;
+  }
+
+  function semaWaiting() {
+    // Chỉ ở chế độ Semaphore: thread Tomcat bận nhưng không cầm permit = đang đứng chờ permit
+    return run && run.mode === 'semaphore' && run.running ? Math.max(0, live.tomcatBusy - live.semaUsed) : 0;
+  }
+
+  function render() {
+    if (!live) return;
+    slots($('tomcat'), live.tomcatMax, live.tomcatBusy, 'tomcat');
+    $('tomcatTxt').textContent = `${live.tomcatBusy}/${live.tomcatMax} bận`;
+    slots($('sema'), live.semaMax, live.semaUsed, 'sema');
+    $('semaTxt').textContent = `${live.semaUsed}/${live.semaMax}`;
+    const waiting = semaWaiting();
+    slots($('semaWait'), waiting, waiting, 'wait');
+    $('semaWaitTxt').textContent = waiting ? `${waiting} thread` : '';
+    slots($('pool'), live.poolMax, live.poolActive, 'pool');
+    $('poolTxt').textContent = `${live.poolActive}/${live.poolMax}`;
+    slots($('queue'), live.queueMax, live.queue, 'queue');
+    $('queueTxt').textContent = `${live.queue}/${live.queueMax}`;
+
+    if (run) {
+      const done = run.results.filter(r => r[0] !== 0).length;
+      $('runTxt').textContent = `${NAMES[run.mode]} · ${done}/${run.n} xong · ${(run.elapsedMs / 1000).toFixed(1)}s`;
+      $('reqs').innerHTML = run.results.map(([code, ms], i) => {
+        const cls = code === 0 ? 'pending' : code === 200 ? 'ok' : code === 503 ? 'bad' : 'err';
+        const t = code === 0 ? '…' : (ms / 1000).toFixed(1);
+        return `<div class="req ${cls}" title="CV-${i + 1}: ${code || 'đang chờ'}"><b>${i + 1}</b>${t}</div>`;
+      }).join('');
+    }
+  }
+
+  function trackPeaks() {
+    if (!peaks || !run || !live) return;
+    const parse = run.mode === 'semaphore' ? live.semaUsed : run.mode === 'thread-pool' ? live.poolActive : live.tomcatBusy;
+    const waiting = run.mode === 'semaphore' ? semaWaiting() : run.mode === 'thread-pool' ? live.queue : 0;
+    peaks.tomcat = Math.max(peaks.tomcat, live.tomcatBusy);
+    peaks.parse = Math.max(peaks.parse, parse);
+    peaks.wait = Math.max(peaks.wait, waiting);
+  }
+
+  function recordRun() {
+    if (!run || run.running || !peaks || run.startedAt < clickedAt - 2000) return;
+    const ok = run.results.filter(r => r[0] === 200).length;
+    const rejected = run.results.filter(r => r[0] === 503);
+    const rejT = rejected.length
+      ? `${(Math.min(...rejected.map(r => r[1])) / 1000).toFixed(2)}–${(Math.max(...rejected.map(r => r[1])) / 1000).toFixed(2)}s` : '–';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><b>${NAMES[run.mode]}</b></td><td>${(peaks.ping / 1000).toFixed(3)}s</td>
+      <td>${peaks.tomcat}/${live.tomcatMax}</td><td>${peaks.parse}</td><td>${peaks.wait}</td>
+      <td>${ok}</td><td>${rejected.length}</td><td>${rejT}</td>`;
+    $('cmp').querySelector('tbody').appendChild(tr);
+    $('msg').textContent = `Xong lượt ${NAMES[run.mode]}.`;
+    setButtons(false);
+    peaks = null;
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch(MGMT, { cache: 'no-store' });
+      const body = await res.json();
+      live = body.live;
+      if (body.run) run = { ...body.run, startedAt: Date.now() - body.run.elapsedMs };
+      trackPeaks();
+      render();
+      recordRun();
+    } catch (e) {
+      $('msg').textContent = `Không đọc được ${MGMT} – chạy cv-parse-service với profile demo.`;
+    }
+    setTimeout(poll, 500);
+  }
+
+  // /ping chạy tuần tự: gửi -> đợi phản hồi -> nghỉ 500ms -> gửi tiếp. Đang đợi thì số trên màn hình tăng dần.
+  async function pingLoop() {
+    while (true) {
+      pingStartedAt = performance.now();
+      let ms;
+      try {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), 60000);
+        await fetch(PING + '?t=' + Date.now(), { cache: 'no-store', signal: ctrl.signal });
+        clearTimeout(timer);
+        ms = performance.now() - pingStartedAt;
+      } catch (e) {
+        ms = performance.now() - pingStartedAt;
+      }
+      pingStartedAt = null;
+      pings.push([Date.now(), ms]);
+      if (peaks) peaks.ping = Math.max(peaks.ping, ms);
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  function drawPing() {
+    const waitingMs = pingStartedAt ? performance.now() - pingStartedAt : null;
+    const shown = waitingMs !== null && waitingMs > 300 ? waitingMs : (pings.length ? pings[pings.length - 1][1] : null);
+    if (peaks && waitingMs) peaks.ping = Math.max(peaks.ping, waitingMs);
+    if (shown !== null) {
+      const cls = shown < 200 ? 'good' : shown < 2000 ? 'warn' : 'badc';
+      const text = shown < 1000 ? `${Math.round(shown)} <small>ms</small>` : `${(shown / 1000).toFixed(1)} <small>giây</small>`;
+      $('pingNow').innerHTML = `<span class="${cls}">${text}</span>`;
+      $('pingState').textContent = waitingMs !== null && waitingMs > 300 ? 'đang chờ phản hồi…' : '';
+    }
+    // biểu đồ 60 giây gần nhất
+    const now = Date.now(), from = now - 60000;
+    const pts = pings.filter(p => p[0] >= from);
+    if (waitingMs !== null) pts.push([now, waitingMs]);
+    const maxMs = Math.max(1000, ...pts.map(p => p[1]));
+    const line = pts.map(([t, v]) => `${((t - from) / 60000 * 300).toFixed(1)},${(88 - v / maxMs * 84).toFixed(1)}`).join(' ');
+    $('pingChart').innerHTML =
+      `<line x1="0" y1="88" x2="300" y2="88" stroke="#e3e6eb"/>` +
+      `<text x="2" y="10" font-size="9" fill="#667085">${(maxMs / 1000).toFixed(1)}s</text>` +
+      `<polyline points="${line}" fill="none" stroke="#e8590c" stroke-width="2" vector-effect="non-scaling-stroke"/>`;
+    requestAnimationFrame(drawPing);
+  }
+
+  function setButtons(disabled) {
+    document.querySelectorAll('button[data-mode]').forEach(b => b.disabled = disabled);
+  }
+
+  document.querySelectorAll('button[data-mode]').forEach(btn => btn.addEventListener('click', async () => {
+    const mode = btn.dataset.mode, n = parseInt($('n').value, 10) || 40;
+    setButtons(true);
+    clickedAt = Date.now();
+    $('msg').textContent = `Đang bắn ${n} CV – ${NAMES[mode]}…`;
+    try {
+      const res = await fetch(MGMT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode, n }) });
+      const body = await res.json();
+      if (body.error) { $('msg').textContent = body.error; setButtons(false); return; }
+      peaks = { ping: 0, tomcat: 0, parse: 0, wait: 0 };
+    } catch (e) {
+      $('msg').textContent = 'Không gửi được lệnh bắn tải: ' + e;
+      setButtons(false);
+    }
+  }));
+
+  poll();
+  pingLoop();
+  requestAnimationFrame(drawPing);
+</script>
+</body>
+</html>
