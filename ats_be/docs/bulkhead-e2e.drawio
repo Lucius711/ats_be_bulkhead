@@ -1,0 +1,198 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="e2e-upload" name="1. Nộp CV → parse → kết quả (bất đồng bộ)">
+    <mxGraphModel dx="1900" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1900" pageHeight="820" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="title" value="&lt;b&gt;E2E: nộp CV → RabbitMQ → cv-parse-service (ThreadPool bulkhead, bất đồng bộ) → kết quả&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;" vertex="1" parent="1"><mxGeometry x="20" y="0" width="1200" height="30" as="geometry" /></mxCell>
+        <mxCell id="keycloak" value="&lt;b&gt;Keycloak&lt;/b&gt; :8180&lt;br&gt;realm ats · client ats-web" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;" vertex="1" parent="1"><mxGeometry x="20" y="60" width="180" height="60" as="geometry" /></mxCell>
+        <mxCell id="eureka" value="&lt;b&gt;Eureka&lt;/b&gt; :8761" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;" vertex="1" parent="1"><mxGeometry x="330" y="55" width="130" height="45" as="geometry" /></mxCell>
+        <mxCell id="config" value="&lt;b&gt;Config Server&lt;/b&gt; :8888&lt;br&gt;config-repo/*.yml" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#999999;" vertex="1" parent="1"><mxGeometry x="480" y="50" width="170" height="55" as="geometry" /></mxCell>
+        <mxCell id="browser" value="&lt;b&gt;Trình duyệt&lt;/b&gt;&lt;br&gt;Tiếp nhận hồ sơ&lt;br&gt;localhost:3000 (demo-ui)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="20" y="210" width="180" height="80" as="geometry" /></mxCell>
+        <mxCell id="gateway" value="&lt;b&gt;API Gateway&lt;/b&gt; :8080&lt;br&gt;xác thực JWT → X-User-*&lt;br&gt;route lb://… qua Eureka" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1"><mxGeometry x="330" y="210" width="180" height="80" as="geometry" /></mxCell>
+        <mxCell id="reply" value="&lt;b&gt;8&lt;/b&gt; · 201 trả về ngay (~0,1–0,2 s) – người dùng không chờ parse" style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontColor=#16a34a;whiteSpace=wrap;" vertex="1" parent="1"><mxGeometry x="20" y="298" width="300" height="34" as="geometry" /></mxCell>
+        <mxCell id="cand" value="candidate-service :8082" style="swimlane;startSize=28;fillColor=#d5e8d4;strokeColor=#82b366;rounded=1;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="600" y="150" width="360" height="340" as="geometry" /></mxCell>
+        <mxCell id="cctrl" value="&lt;b&gt;CandidateController&lt;/b&gt;&lt;br&gt;POST /api/v1/candidates (multipart)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="cand"><mxGeometry x="20" y="40" width="320" height="50" as="geometry" /></mxCell>
+        <mxCell id="csvc" value="&lt;b&gt;CandidateServiceImpl.saveWithCv()&lt;/b&gt;&lt;br&gt;@Transactional · lưu CV (PENDING) · upload MinIO&lt;br&gt;gửi lệnh parse &lt;b&gt;sau khi commit&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;" vertex="1" parent="cand"><mxGeometry x="20" y="115" width="320" height="85" as="geometry" /></mxCell>
+        <mxCell id="cres" value="&lt;b&gt;CvParseResultListener&lt;/b&gt;&lt;br&gt;→ PARSED, parsed_data, parsed_at" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#82b366;fontSize=11;" vertex="1" parent="cand"><mxGeometry x="170" y="245" width="170" height="70" as="geometry" /></mxCell>
+        <mxCell id="minio" value="&lt;b&gt;MinIO&lt;/b&gt; :9000&lt;br&gt;bucket ats-cv" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="600" y="560" width="160" height="80" as="geometry" /></mxCell>
+        <mxCell id="pg" value="&lt;b&gt;PostgreSQL&lt;/b&gt;&lt;br&gt;ats_candidate_dbs · cvs" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;size=10;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1"><mxGeometry x="780" y="560" width="160" height="80" as="geometry" /></mxCell>
+        <mxCell id="rmq" value="RabbitMQ :5672" style="swimlane;startSize=28;fillColor=#ffe6cc;strokeColor=#d79b00;rounded=1;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="1050" y="150" width="250" height="340" as="geometry" /></mxCell>
+        <mxCell id="exch" value="exchange &lt;b&gt;ats.cv.exchange&lt;/b&gt; (direct)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;" vertex="1" parent="rmq"><mxGeometry x="25" y="40" width="200" height="50" as="geometry" /></mxCell>
+        <mxCell id="parseq" value="queue &lt;b&gt;ats.cv.parse.q&lt;/b&gt;&lt;br&gt;rk cv.parse · DLQ ats.cv.parse.dlq" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;" vertex="1" parent="rmq"><mxGeometry x="25" y="130" width="200" height="60" as="geometry" /></mxCell>
+        <mxCell id="resq" value="queue &lt;b&gt;ats.cv.result.q&lt;/b&gt;&lt;br&gt;rk cv.result" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#d79b00;" vertex="1" parent="rmq"><mxGeometry x="25" y="250" width="200" height="60" as="geometry" /></mxCell>
+        <mxCell id="cvp" value="cv-parse-service :8085" style="swimlane;startSize=28;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;fontStyle=1;html=1;" vertex="1" parent="1"><mxGeometry x="1400" y="150" width="430" height="490" as="geometry" /></mxCell>
+        <mxCell id="listener" value="&lt;b&gt;CvParseMessageListener&lt;/b&gt; @RabbitListener&lt;br&gt;prefetch 20 · ack MANUAL · trả CompletableFuture" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp"><mxGeometry x="20" y="40" width="390" height="55" as="geometry" /></mxCell>
+        <mxCell id="exec" value="&lt;b&gt;CvParseExecutor.submitBatch()&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp"><mxGeometry x="20" y="120" width="390" height="40" as="geometry" /></mxCell>
+        <mxCell id="tp" value="&lt;b&gt;ThreadPool bulkhead cvParseBatch&lt;/b&gt;&lt;br&gt;3 thread + 17 hàng đợi · chạy trên bulkhead-cvParseBatch-*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#2563eb;strokeWidth=2;" vertex="1" parent="cvp"><mxGeometry x="20" y="185" width="390" height="60" as="geometry" /></mxCell>
+        <mxCell id="reader" value="&lt;b&gt;MinioCvFileReader&lt;/b&gt;&lt;br&gt;đọc CV (UTF-8)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp"><mxGeometry x="20" y="275" width="180" height="55" as="geometry" /></mxCell>
+        <mxCell id="engine" value="&lt;b&gt;AnalysisEngine&lt;/b&gt;&lt;br&gt;5 slot dùng chung · BATCH 8s" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;strokeWidth=2;" vertex="1" parent="cvp"><mxGeometry x="230" y="275" width="180" height="55" as="geometry" /></mxCell>
+        <mxCell id="analyze" value="&lt;b&gt;CvParseServiceImpl.analyze()&lt;/b&gt;&lt;br&gt;email, phone, skills, kinh nghiệm, học vấn…" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp"><mxGeometry x="20" y="360" width="390" height="50" as="geometry" /></mxCell>
+        <mxCell id="cvpnote" value="Container chỉ ack khi parse xong. Ngăn đầy → requeue sau 1s (không vào DLQ).&lt;br&gt;Tin nhắn chưa xử lý chờ an toàn trong RabbitMQ." style="text;html=1;align=left;verticalAlign=top;fontSize=11;fontColor=#666666;whiteSpace=wrap;" vertex="1" parent="cvp"><mxGeometry x="20" y="420" width="390" height="40" as="geometry" /></mxCell>
+        <mxCell id="e1" value="&lt;b&gt;1&lt;/b&gt; · token (password grant)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="browser" target="keycloak"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e2" value="&lt;b&gt;2&lt;/b&gt; · POST /api/v1/candidates&lt;br&gt;multipart + Bearer" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="browser" target="gateway"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e3" value="&lt;b&gt;3&lt;/b&gt; · lb://candidate-service" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.3;entryX=0;entryY=0.5;" edge="1" parent="1" source="gateway" target="cctrl"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e4" value="&lt;b&gt;4&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="cctrl" target="csvc"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e5" value="&lt;b&gt;5&lt;/b&gt; · INSERT candidates, cvs (PENDING)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.4;exitY=1;entryX=0.25;entryY=0;" edge="1" parent="1" source="csvc" target="pg"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="748" y="545" /><mxPoint x="820" y="545" /></Array></mxGeometry></mxCell>
+        <mxCell id="e6" value="&lt;b&gt;6&lt;/b&gt; · putObject" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.19;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="csvc" target="minio"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e7" value="&lt;b&gt;7&lt;/b&gt; · sau commit: CvParseCommand&lt;br&gt;rk cv.parse" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;strokeColor=#d79b00;strokeWidth=2;exitX=1;exitY=0.5;entryX=0;entryY=0.3;" edge="1" parent="1" source="csvc" target="exch"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1010" y="307" /><mxPoint x="1010" y="205" /></Array></mxGeometry></mxCell>
+        <mxCell id="e9" value="&lt;b&gt;9&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;strokeColor=#d79b00;" edge="1" parent="1" source="exch" target="parseq"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e10" value="&lt;b&gt;10&lt;/b&gt; · giao ≤ 20 tin chưa ack" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;strokeColor=#d79b00;strokeWidth=2;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="parseq" target="listener"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1360" y="310" /><mxPoint x="1360" y="217" /></Array></mxGeometry></mxCell>
+        <mxCell id="e11" value="&lt;b&gt;11&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;" edge="1" parent="1" source="listener" target="exec"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e12" value="&lt;b&gt;12&lt;/b&gt; · @Bulkhead(THREADPOOL)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;strokeColor=#2563eb;" edge="1" parent="1" source="exec" target="tp"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e13" value="&lt;b&gt;13&lt;/b&gt; · đọc file" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.25;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="tp" target="reader"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e14" value="getObject" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;dashed=1;exitX=0;exitY=0.5;entryX=0.5;entryY=1;" edge="1" parent="1" source="reader" target="minio"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1380" y="452" /><mxPoint x="1380" y="675" /><mxPoint x="680" y="675" /></Array></mxGeometry></mxCell>
+        <mxCell id="e15" value="&lt;b&gt;14&lt;/b&gt; · chiếm 1 slot (8s)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.75;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="tp" target="engine"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e16" value="&lt;b&gt;15&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.5;exitY=1;entryX=0.75;entryY=0;" edge="1" parent="1" source="engine" target="analyze"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e17" value="&lt;b&gt;16&lt;/b&gt; · CvParseResultEvent, rk cv.result" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;strokeColor=#d79b00;strokeWidth=2;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="analyze" target="exch"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1850" y="535" /><mxPoint x="1850" y="125" /><mxPoint x="1175" y="125" /></Array></mxGeometry></mxCell>
+        <mxCell id="e18" value="&lt;b&gt;17&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;strokeColor=#d79b00;exitX=0;exitY=0.8;entryX=0;entryY=0.25;" edge="1" parent="1" source="exch" target="resq"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1062" y="230" /><mxPoint x="1062" y="415" /></Array></mxGeometry></mxCell>
+        <mxCell id="e19" value="&lt;b&gt;18&lt;/b&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;strokeColor=#d79b00;strokeWidth=2;exitX=0;exitY=0.75;entryX=1;entryY=0.5;" edge="1" parent="1" source="resq" target="cres"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e20" value="&lt;b&gt;19&lt;/b&gt; · UPDATE cvs → PARSED" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;exitX=0.76;exitY=1;entryX=0.74;entryY=0;" edge="1" parent="1" source="cres" target="pg"><mxGeometry relative="1" as="geometry"></mxGeometry></mxCell>
+        <mxCell id="e21" value="&lt;b&gt;20&lt;/b&gt; · GET /api/v1/candidates/cvs mỗi 2s → &quot;Đã phân tích&quot;" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;labelBackgroundColor=#ffffff;dashed=1;exitX=0.5;exitY=1;entryX=0.5;entryY=1;" edge="1" parent="1" source="browser" target="gateway"><mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="110" y="380" /><mxPoint x="420" y="380" /></Array></mxGeometry></mxCell>
+        <mxCell id="legend" value="&lt;b&gt;Đọc sơ đồ&lt;/b&gt;&lt;br&gt;1 → 20: thứ tự thực thi thật trong code&lt;br&gt;Cam đậm: tin nhắn RabbitMQ · Xanh dương: ngăn ThreadPool bulkhead&lt;br&gt;Vàng: engine phân tích dùng chung (5 slot)" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=10;fillColor=#ffffff;strokeColor=#cccccc;fontSize=11;" vertex="1" parent="1"><mxGeometry x="20" y="700" width="460" height="80" as="geometry" /></mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="e2e-hr" name="2. HR chấm điểm + chia ngăn engine (đồng bộ)">
+    <mxGraphModel dx="1500" dy="900" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1500" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t2" value="&lt;b&gt;HR chấm điểm CV (đồng bộ, Semaphore) và chia ngăn engine 5 slot = 3 + 2&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;" vertex="1" parent="1">
+          <mxGeometry x="20" y="0" width="1100" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="hr" value="&lt;b&gt;Trình duyệt – HR&lt;/b&gt;&lt;br&gt;hr.html: chấm điểm CV theo JD" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="140" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="mon" value="&lt;b&gt;Trình duyệt – Giám sát&lt;/b&gt;&lt;br&gt;giam-sat.html (ADMIN)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;" vertex="1" parent="1">
+          <mxGeometry x="20" y="470" width="180" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="gw2" value="&lt;b&gt;API Gateway&lt;/b&gt; :8080&lt;br&gt;JWT → X-User-*" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="260" y="300" width="160" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="rmq2" value="&lt;b&gt;RabbitMQ&lt;/b&gt;&lt;br&gt;ats.cv.parse.q" style="shape=process;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="1">
+          <mxGeometry x="1290" y="110" width="170" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="cvp2" value="cv-parse-service :8085" style="swimlane;startSize=28;fillColor=#e1d5e7;strokeColor=#9673a6;rounded=1;fontStyle=1;html=1;" vertex="1" parent="1">
+          <mxGeometry x="480" y="50" width="770" height="640" as="geometry" />
+        </mxCell>
+        <mxCell id="ctrl2" value="&lt;b&gt;CvParseController&lt;/b&gt;&lt;br&gt;POST /api/v1/cvparse/match · /analyze" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp2">
+          <mxGeometry x="20" y="70" width="330" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="exec2" value="&lt;b&gt;CvParseExecutor.interactive()&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp2">
+          <mxGeometry x="20" y="155" width="330" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="sema" value="&lt;b&gt;Semaphore bulkhead cvParseInteractive&lt;/b&gt;&lt;br&gt;2 permit · chờ tối đa 0,5s · chạy trên thread request" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#16a34a;strokeWidth=2;" vertex="1" parent="cvp2">
+          <mxGeometry x="20" y="225" width="330" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="busy" value="&lt;b&gt;BulkheadExceptionHandler&lt;/b&gt;&lt;br&gt;BulkheadFullException → 503 CV_PARSE_BUSY" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f8cecc;strokeColor=#b85450;" vertex="1" parent="cvp2">
+          <mxGeometry x="20" y="320" width="330" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="monctl" value="&lt;b&gt;BulkheadMonitorController&lt;/b&gt;&lt;br&gt;GET /api/v1/cvparse/bulkhead · PUT /mode" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp2">
+          <mxGeometry x="20" y="440" width="330" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="mode" value="&lt;b&gt;BulkheadMode&lt;/b&gt;&lt;br&gt;bật mặc định · đổi lúc chạy chỉ khi toggle-enabled (demo)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp2">
+          <mxGeometry x="20" y="540" width="330" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="tp2" value="&lt;b&gt;ThreadPool bulkhead cvParseBatch&lt;/b&gt;&lt;br&gt;3 thread + 17 hàng đợi (bất đồng bộ)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#2563eb;strokeWidth=2;" vertex="1" parent="cvp2">
+          <mxGeometry x="410" y="55" width="330" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="eng" value="AnalysisEngine – 5 slot (fair)" style="swimlane;startSize=26;fillColor=#fff2cc;strokeColor=#d6b656;rounded=1;fontStyle=1;html=1;" vertex="1" parent="cvp2">
+          <mxGeometry x="410" y="170" width="330" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="s1" value="batch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2563eb;strokeColor=none;fontColor=#ffffff;fontSize=11;" vertex="1" parent="eng">
+          <mxGeometry x="15" y="45" width="50" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s2" value="batch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2563eb;strokeColor=none;fontColor=#ffffff;fontSize=11;" vertex="1" parent="eng">
+          <mxGeometry x="77" y="45" width="50" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s3" value="batch" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#2563eb;strokeColor=none;fontColor=#ffffff;fontSize=11;" vertex="1" parent="eng">
+          <mxGeometry x="139" y="45" width="50" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s4" value="HR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#16a34a;strokeColor=none;fontColor=#ffffff;fontSize=11;" vertex="1" parent="eng">
+          <mxGeometry x="201" y="45" width="50" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="s5" value="HR" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#16a34a;strokeColor=none;fontColor=#ffffff;fontSize=11;" vertex="1" parent="eng">
+          <mxGeometry x="263" y="45" width="50" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="engtxt" value="Có bulkhead: batch tối đa 3 slot, HR luôn còn 2 slot riêng.&lt;br&gt;Không bulkhead: batch chiếm cả 5 slot, HR xếp hàng phía sau (~30s)." style="text;html=1;align=left;verticalAlign=top;fontSize=11;whiteSpace=wrap;" vertex="1" parent="eng">
+          <mxGeometry x="15" y="110" width="300" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="svc2" value="&lt;b&gt;CvParseServiceImpl.match()&lt;/b&gt;&lt;br&gt;điểm phù hợp, kỹ năng khớp/thiếu, khuyến nghị" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#9673a6;" vertex="1" parent="cvp2">
+          <mxGeometry x="410" y="410" width="330" height="55" as="geometry" />
+        </mxCell>
+        <mxCell id="cfg2" value="&lt;b&gt;config-repo/cv-parse-service.yml&lt;/b&gt;&lt;br&gt;resilience4j.thread-pool-bulkhead.cvParseBatch: 3 / 3 / 17&lt;br&gt;resilience4j.bulkhead.cvParseInteractive: 2, 500ms&lt;br&gt;cv-parse.engine: capacity 5 · demo: parse 8s, match 2s" style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=8;fillColor=#f5f5f5;strokeColor=#999999;fontSize=11;" vertex="1" parent="cvp2">
+          <mxGeometry x="410" y="500" width="330" height="95" as="geometry" />
+        </mxCell>
+
+        <mxCell id="h1" value="H1 POST /api/v1/cvparse/match" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;exitX=1;exitY=0.5;entryX=0.5;entryY=0;" edge="1" parent="1" source="hr" target="gw2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="h2" value="H2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;exitX=1;exitY=0.3;entryX=0;entryY=0.5;" edge="1" parent="1" source="gw2" target="ctrl2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="h3" value="H3" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;" edge="1" parent="1" source="ctrl2" target="exec2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="h4" value="H4 @Bulkhead(SEMAPHORE)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;strokeColor=#16a34a;" edge="1" parent="1" source="exec2" target="sema">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="h5" value="H5 slot HR (2s)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;strokeColor=#16a34a;strokeWidth=2;exitX=1;exitY=0.5;entryX=0;entryY=0.6;" edge="1" parent="1" source="sema" target="eng">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="h6" value="H6" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="eng" target="svc2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="h7" value="đầy &amp;gt; 0,5s" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;strokeColor=#b85450;fontColor=#b85450;fontSize=11;" edge="1" parent="1" source="sema" target="busy">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="h8" value="H7 200 (~2s) hoặc 503 ngay" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;strokeColor=#16a34a;fontColor=#16a34a;fontSize=11;exitX=0;exitY=0.25;entryX=0.5;entryY=0;" edge="1" parent="1" source="ctrl2" target="hr">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points"><mxPoint x="460" y="134" /><mxPoint x="460" y="90" /><mxPoint x="110" y="90" /></Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="b1" value="parse hàng loạt" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;strokeColor=#d79b00;strokeWidth=2;exitX=0;exitY=0.5;entryX=1;entryY=0.5;" edge="1" parent="1" source="rmq2" target="tp2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="b2" value="≤ 3 slot" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;strokeColor=#2563eb;strokeWidth=2;" edge="1" parent="1" source="tp2" target="eng">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m1" value="M1 GET trạng thái mỗi 1s · PUT bật/tắt" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;exitX=1;exitY=0.5;entryX=0.5;entryY=1;" edge="1" parent="1" source="mon" target="gw2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m2" value="M2" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;exitX=1;exitY=0.7;entryX=0;entryY=0.5;" edge="1" parent="1" source="gw2" target="monctl">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m3" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=11;" edge="1" parent="1" source="monctl" target="mode">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="m4" value="đọc engine, 2 ngăn, RabbitMQ" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;dashed=1;fontSize=11;labelBackgroundColor=#ffffff;exitX=1;exitY=0.5;entryX=0;entryY=0.85;" edge="1" parent="1" source="monctl" target="eng">
+          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="860" y="517" /><mxPoint x="860" y="390" /></Array></mxGeometry>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  <diagram id="e2e-result" name="3. Kết quả đo thật (40 CV)">
+    <mxGraphModel dx="1200" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1200" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="t3" value="&lt;b&gt;Kết quả đo thật qua giao diện demo – 40 CV nộp cùng lúc&lt;/b&gt;" style="text;html=1;align=left;verticalAlign=middle;fontSize=18;" vertex="1" parent="1">
+          <mxGeometry x="20" y="0" width="900" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="off" value="&lt;font style=&quot;font-size:20px&quot;&gt;&lt;b&gt;KHÔNG bulkhead&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;br&gt;Engine: parse hàng loạt chiếm &lt;b&gt;5/5&lt;/b&gt; slot&lt;br&gt;HR chấm điểm chậm nhất: &lt;b&gt;&lt;font color=&quot;#c62828&quot; style=&quot;font-size:22px&quot;&gt;32,0 s&lt;/font&gt;&lt;/b&gt;&lt;br&gt;HR trung bình: 21,5 s&lt;br&gt;Nộp 40 hồ sơ: 0,57 s&lt;br&gt;Parse hết 40 CV: 67 s&lt;br&gt;CV mất / vào DLQ: 0" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=16;spacingTop=12;fillColor=#fde8e8;strokeColor=#c62828;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="20" y="60" width="420" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="on" value="&lt;font style=&quot;font-size:20px&quot;&gt;&lt;b&gt;CÓ bulkhead&lt;/b&gt;&lt;/font&gt;&lt;br&gt;&lt;br&gt;Engine: parse hàng loạt &lt;b&gt;3/5&lt;/b&gt; slot · HR giữ riêng 2 slot&lt;br&gt;HR chấm điểm chậm nhất: &lt;b&gt;&lt;font color=&quot;#16803c&quot; style=&quot;font-size:22px&quot;&gt;2,1 s&lt;/font&gt;&lt;/b&gt;&lt;br&gt;HR trung bình: 2,0 s&lt;br&gt;Nộp 40 hồ sơ: 0,54 s&lt;br&gt;Parse hết 40 CV: 114 s (đánh đổi có chủ đích)&lt;br&gt;CV mất / vào DLQ: 0 – phần dư chờ trong RabbitMQ" style="rounded=1;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=16;spacingTop=12;fillColor=#e3f4e8;strokeColor=#16803c;fontSize=14;" vertex="1" parent="1">
+          <mxGeometry x="480" y="60" width="440" height="210" as="geometry" />
+        </mxCell>
+        <mxCell id="arrow" value="" style="shape=singleArrow;whiteSpace=wrap;html=1;fillColor=#999999;strokeColor=none;" vertex="1" parent="1">
+          <mxGeometry x="445" y="145" width="30" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="msg" value="&lt;b&gt;Thông điệp:&lt;/b&gt; parse CV chậm chỉ làm chậm việc parse CV. Chức năng đồng bộ của HR được giữ riêng phần năng lực&lt;br&gt;(ngăn Semaphore), còn việc hàng loạt chạy bất đồng bộ trên ngăn ThreadPool có giới hạn, phần dư chờ an toàn trong RabbitMQ." style="rounded=1;whiteSpace=wrap;html=1;align=left;spacingLeft=14;fillColor=#ffffff;strokeColor=#cccccc;fontSize=13;" vertex="1" parent="1">
+          <mxGeometry x="20" y="300" width="900" height="70" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
