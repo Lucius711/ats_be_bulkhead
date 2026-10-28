@@ -1,23 +1,270 @@
-name: talenthub
-
-# All services join Compose's default network automatically and can reach
-# each other by service name (eg "eureka-server", "job-db"). No custom
-# network block is needed for a single-file local setup.
+name: ats
 
 services:
-  # ===== KEYCLOAK (Identity Provider) =====
+  # PostgreSQL dùng chung cho local. Mỗi service vẫn có database riêng.
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-dieunt}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-ats_dev_password}
+      POSTGRES_DB: ${JOB_DB_NAME:-ats_job_dbs}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-dieunt} -d ${JOB_DB_NAME:-ats_job_dbs}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  # RabbitMQ dùng cho candidate-service và cv-parse-service.
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_DEFAULT_USER:-ats}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS:-ats}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  # MinIO dùng chung cho candidate-service và cv-parse-service.
+  # API: http://localhost:9000 | Console: http://localhost:9001
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-admin123}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
   keycloak:
     image: quay.io/keycloak/keycloak:26.8.0
-    # start-dev: chế độ dev (không cần HTTPS). --import-realm: nạp realm từ file lúc khởi động.
+    restart: unless-stopped
     command: ["start-dev", "--import-realm"]
-    ports:
-      - "8180:8080"          # gọi token tại http://localhost:8180/realms/ats/...
     environment:
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin       # tài khoản admin console (dev)
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USERNAME:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # URL public cho trình duyệt/Postman. Gateway dùng JWKS nội bộ bên dưới.
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:-http://localhost:8180}
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
-      KC_PROXY_HEADERS: "xforwarded"
-#    volumes:
-#      # Keycloak đọc mọi file JSON trong thư mục import này lúc start
-#      - ./infra/keycloak/talenthub-realm.json:/opt/keycloak/data/import/talenthub-realm.json:ro
+      KC_PROXY_HEADERS: xforwarded
+    ports:
+      - "${KEYCLOAK_PORT:-8180}:8080"
+    volumes:
+      - keycloak-data:/opt/keycloak/data
+      - ./docker/keycloak/ats-realm.json:/opt/keycloak/data/import/ats-realm.json:ro
+  config-server:
+    build:
+      context: ./infras/config-server
+      dockerfile: Dockerfile
+    image: ats-config-server:local
+    restart: unless-stopped
+    environment:
+      CONFIG_SERVER_PORT: 8888
+      CONFIG_SERVER_PROFILE: native
+      CONFIG_REPO_PATH: file:/app/config-repo
+    ports:
+      - "${CONFIG_SERVER_PORT:-8888}:8888"
+    volumes:
+      - ./config-repo:/app/config-repo:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8888/actuator/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+  eureka-server:
+    build:
+      context: ./infras/eureka-server
+      dockerfile: Dockerfile
+    image: ats-eureka-server:local
+    restart: unless-stopped
+    environment:
+      EUREKA_SERVER_PORT: 8761
+      EUREKA_HOSTNAME: eureka-server
+    ports:
+      - "${EUREKA_PORT:-8761}:8761"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8761/actuator/health > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+  job-service:
+    build:
+      context: ./services/job-service
+      dockerfile: Dockerfile
+    image: ats-job-service:local
+    restart: unless-stopped
+    environment:
+      CONFIG_SERVER_URL: http://config-server:8888
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-dieunt}
+      DB_PASSWORD: ${DB_PASSWORD:-ats_dev_password}
+      JOB_SERVICE_PORT: 8081
+      JOB_DB_NAME: ${JOB_DB_NAME:-ats_job_dbs}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    ports:
+      - "${JOB_SERVICE_PORT:-8081}:8081"
+  candidate-service:
+    build:
+      context: ./services/candidate-service
+      dockerfile: Dockerfile
+    image: ats-candidate-service:local
+    restart: unless-stopped
+    environment:
+      CONFIG_SERVER_URL: http://config-server:8888
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-dieunt}
+      DB_PASSWORD: ${DB_PASSWORD:-ats_dev_password}
+      CANDIDATE_SERVICE_PORT: 8082
+      CANDIDATE_DB_NAME: ${CANDIDATE_DB_NAME:-ats_candidate_dbs}
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-ats}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-ats}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-ats-cv}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "${CANDIDATE_SERVICE_PORT:-8082}:8082"
+  application-service:
+    build:
+      context: ./services/application-service
+      dockerfile: Dockerfile
+    image: ats-application-service:local
+    restart: unless-stopped
+    environment:
+      CONFIG_SERVER_URL: http://config-server:8888
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-dieunt}
+      DB_PASSWORD: ${DB_PASSWORD:-ats_dev_password}
+      APPLICATION_SERVICE_PORT: 8083
+      APPLICATION_DB_NAME: ${APPLICATION_DB_NAME:-ats_application_dbs}
+      JOB_SERVICE_URL: http://job-service:8081
+      CANDIDATE_SERVICE_URL: http://candidate-service:8082
+    depends_on:
+      postgres:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      job-service:
+        condition: service_started
+      candidate-service:
+        condition: service_started
+    ports:
+      - "${APPLICATION_SERVICE_PORT:-8083}:8083"
+  cv-parse-service:
+    build:
+      context: ./services/cv-parse-service
+      dockerfile: Dockerfile
+    environment:
+      CONFIG_SERVER_URL: http://config-server:8888
+      CONFIG_SERVER_USERNAME: config-admin
+      CONFIG_SERVER_PASSWORD: change-this-password
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      SPRING_PROFILES_ACTIVE: dev
+      CV_PARSE_MODE: simulated
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: ${RABBITMQ_DEFAULT_USER:-ats}
+      SPRING_RABBITMQ_PASSWORD: ${RABBITMQ_DEFAULT_PASS:-ats}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-admin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-admin123}
+      MINIO_BUCKET: ${MINIO_BUCKET:-ats-cv}
+      CV_PARSE_SERVICE_PORT: 8085
+    ports:
+      - "${CV_PARSE_SERVICE_PORT:-8085}:8085"
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: on-failure
+
+  api-gateway:
+    build:
+      context: ./infras/api-gateway
+      dockerfile: Dockerfile
+    image: ats-api-gateway:local
+    restart: unless-stopped
+    environment:
+      CONFIG_SERVER_URL: http://config-server:8888
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-dieunt}
+      DB_PASSWORD: ${DB_PASSWORD:-ats_dev_password}
+      API_GATEWAY_PORT: 8080
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:-http://localhost:8180/realms/ats}
+      KEYCLOAK_JWK_SET_URI: ${KEYCLOAK_JWK_SET_URI_DOCKER:-http://keycloak:8080/realms/ats/protocol/openid-connect/certs}
+    depends_on:
+      config-server:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+      job-service:
+        condition: service_started
+      candidate-service:
+        condition: service_started
+      application-service:
+        condition: service_started
+    ports:
+      - "${API_GATEWAY_PORT:-8080}:8080"
+volumes:
+  postgres-data:
+  rabbitmq-data:
+  minio-data:
+  keycloak-data:

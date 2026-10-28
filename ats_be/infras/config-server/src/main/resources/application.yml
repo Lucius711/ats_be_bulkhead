@@ -19,8 +19,8 @@ spring:
         native:
           search-locations: ${CONFIG_REPO_PATH:file:./config-repo}
 
-        # Nếu muốn dùng Git backend thật, đổi CONFIG_SERVER_PROFILE=git
-        # và bật cấu hình tương ứng bên dưới.
+        # Nếu muốn dùng Git backend thật, đổi CONFIG_SERVER_PROFILE=git.
+        # Cấu hình Git nằm trong application-git.yml để tách biệt theo profile.
         # git:
         #   uri: ${CONFIG_GIT_URI}
         #   default-label: ${CONFIG_GIT_LABEL:main}

@@ -41,7 +41,7 @@ spring:
             - id: cv-parse-service
               uri: lb://cv-parse-service
               predicates:
-                - Path=/api/v1/cvparses/**
+                - Path=/api/v1/cvparse/**
   security:
     oauth2:
       resourceserver:
@@ -50,6 +50,7 @@ spring:
 #          audiences:
 #            - $GOOGLE_CLIENT_ID}
           issuer-uri: ${KEYCLOAK_ISSUER_URI:http://localhost:8180/realms/ats}
+          jwk-set-uri: ${KEYCLOAK_JWK_SET_URI:http://keycloak:8080/realms/ats/protocol/openid-connect/certs}
 
 #     Đoạn cấu hình này dành cho trường hợp API Gateway đóng vai trò OAuth2 Client
 #      client:

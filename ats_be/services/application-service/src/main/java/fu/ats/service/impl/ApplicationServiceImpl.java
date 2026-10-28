@@ -65,6 +65,10 @@ public class ApplicationServiceImpl implements ApplicationService {
         application.setCvId(UUID.randomUUID());
 
         Application savedApplication = applicationRepository.save(application);
+
+        // Publish Message
+
+
         return mapToResponse(savedApplication, candidate);
     }
 

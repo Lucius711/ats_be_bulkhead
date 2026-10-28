@@ -1,7 +1,9 @@
 package fu.ats.client.job;
 
 import feign.Retryer;
+import feign.RequestInterceptor;
 import feign.codec.ErrorDecoder;
+import fu.ats.client.GatewayIdentityRequestInterceptor;
 import org.springframework.context.annotation.Bean;
 
 public class JobFeignConfig {
@@ -15,5 +17,10 @@ public class JobFeignConfig {
     public Retryer retryer() {
         // period 200 ms, max interval 1 s, 3 attempts in total
         return new Retryer.Default(200, 1000, 3);
+    }
+
+    @Bean
+    public RequestInterceptor gatewayIdentityRequestInterceptor() {
+        return new GatewayIdentityRequestInterceptor();
     }
 }

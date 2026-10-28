@@ -1,0 +1,59 @@
+services:
+  # Infra services remain internal in production. Prefer managed services for scale.
+  rabbitmq:
+    ports: !reset []
+
+  minio:
+    ports: !reset []
+
+  postgres:
+    ports: !reset []
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set for production}
+
+  keycloak:
+    command: ["start", "--import-realm"]
+    ports: !reset []
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: ${DB_USERNAME:?DB_USERNAME must be set for production}
+      KC_DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set for production}
+      KC_HOSTNAME: ${KEYCLOAK_HOSTNAME:?KEYCLOAK_HOSTNAME must be set for production}
+      KC_HOSTNAME_STRICT: "true"
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  config-server:
+    environment:
+      CONFIG_SERVER_PROFILE: git
+      CONFIG_GIT_URI: ${CONFIG_GIT_URI:?CONFIG_GIT_URI must be set for production}
+      CONFIG_GIT_LABEL: ${CONFIG_GIT_LABEL:-main}
+      CONFIG_GIT_SEARCH_PATHS: ${CONFIG_GIT_SEARCH_PATHS:-config-repo}
+      CONFIG_GIT_REFRESH_RATE: ${CONFIG_GIT_REFRESH_RATE:-60}
+      CONFIG_GIT_TIMEOUT: ${CONFIG_GIT_TIMEOUT:-10}
+      CONFIG_GIT_USERNAME: ${CONFIG_GIT_USERNAME:-}
+      CONFIG_GIT_PASSWORD: ${CONFIG_GIT_PASSWORD:-}
+    ports: !reset []
+    volumes: !reset []
+
+  eureka-server:
+    ports: !reset []
+
+  job-service:
+    ports: !reset []
+
+  candidate-service:
+    ports: !reset []
+
+  application-service:
+    ports: !reset []
+
+  api-gateway:
+    environment:
+      KEYCLOAK_ISSUER_URI: ${KEYCLOAK_ISSUER_URI:?KEYCLOAK_ISSUER_URI must be set for production}
+    ports:
+      - "${API_GATEWAY_PORT:-8080}:8080"

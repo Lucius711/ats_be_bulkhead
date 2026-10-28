@@ -24,5 +24,20 @@
         </introspection-scope>
       </schema-mapping>
     </data-source>
+    <data-source name="ats_candidate_dbs@localhost" uuid="25144b0b-0761-492a-976b-1d8669ce8d8b">
+      <database-info product="PostgreSQL" version="17.11" jdbc-version="4.2" driver-name="PostgreSQL JDBC Driver" driver-version="42.7.3" dbms="POSTGRES" exact-version="17.11" exact-driver-version="42.7">
+        <identifier-quote-string>&quot;</identifier-quote-string>
+      </database-info>
+      <case-sensitivity plain-identifiers="lower" quoted-identifiers="exact" />
+      <secret-storage>master_key</secret-storage>
+      <user-name>dieunt</user-name>
+      <schema-mapping>
+        <introspection-scope>
+          <node kind="database" qname="@">
+            <node kind="schema" qname="@" />
+          </node>
+        </introspection-scope>
+      </schema-mapping>
+    </data-source>
   </component>
 </project>

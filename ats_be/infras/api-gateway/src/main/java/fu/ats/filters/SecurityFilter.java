@@ -101,8 +101,17 @@ public class SecurityFilter implements GlobalFilter, Ordered {
                                 headers.remove(HttpHeaders.AUTHORIZATION);
 
                                 // 1. User ID
-                                if (jwt.getSubject() != null) {
-                                    headers.set(USER_ID, jwt.getSubject());
+                                // Một số token hiện tại không có claim "sub";
+                                // dùng preferred_username làm định danh dự phòng.
+                                String userId = jwt.getSubject();
+                                if (userId == null || userId.isBlank()) {
+                                    userId = jwt.getClaimAsString(
+                                            "preferred_username"
+                                    );
+                                }
+
+                                if (userId != null && !userId.isBlank()) {
+                                    headers.set(USER_ID, userId);
                                 }
 
                                 // 2. Email

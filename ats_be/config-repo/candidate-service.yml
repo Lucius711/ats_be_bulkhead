@@ -2,6 +2,11 @@ server:
   port: ${CANDIDATE_SERVICE_PORT:8082}
 
 spring:
+  rabbitmq:
+    host: ${SPRING_RABBITMQ_HOST:localhost}
+    port: ${SPRING_RABBITMQ_PORT:5672}
+    username: ${SPRING_RABBITMQ_USERNAME:ats}
+    password: ${SPRING_RABBITMQ_PASSWORD:ats_dev_password}
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${CANDIDATE_DB_NAME:ats_candidate_dbs}
     username: ${DB_USERNAME:dieunt}
@@ -23,3 +28,10 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
     open-in-view: false
+
+candidate:
+  minio:
+    endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    access-key: ${MINIO_ACCESS_KEY:admin}
+    secret-key: ${MINIO_SECRET_KEY:admin123}
+    bucket: ${MINIO_BUCKET:ats-cv}
