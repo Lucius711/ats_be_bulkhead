@@ -11,6 +11,8 @@ import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -26,6 +28,7 @@ public class CvParseResultListener {
 
         cv.setParseStatus(event.successful() ? ParseStatus.PARSED : ParseStatus.FAILED);
         cv.setParsedData(event.successful() ? event.parsedData() : null);
+        cv.setParsedAt(OffsetDateTime.now());
         cvEntityRepository.save(cv);
 
         log.info(

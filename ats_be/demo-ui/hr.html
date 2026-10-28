@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HR chấm điểm CV – ATS</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<header id="topbar"></header>
+<main>
+  <h1>HR chấm điểm CV theo mô tả công việc</h1>
+  <p class="sub">API đồng bộ – HR đứng chờ kết quả trên màn hình. Mục tiêu: luôn nhanh, kể cả khi đang có đợt CV ồ ạt.</p>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2><span>CV đã phân tích</span><span class="small muted" id="cvCount"></span></h2>
+      <div class="tablewrap" style="max-height:420px">
+        <table>
+          <thead><tr><th>Ứng viên</th><th>Kỹ năng</th><th>Kinh nghiệm</th></tr></thead>
+          <tbody id="cvRows"><tr><td colspan="3" class="muted">Đang tải…</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card stack">
+      <div>
+        <h2>Mô tả công việc (JD)</h2>
+        <textarea id="jd">Tuyển Backend Developer: Java, Spring Boot, PostgreSQL, Docker, Kubernetes, Kafka. Ưu tiên có kinh nghiệm AWS.</textarea>
+      </div>
+      <div>
+        <div class="small muted">CV được chọn</div>
+        <div id="selected" class="small"><i class="muted">Bấm một dòng trong danh sách bên trái</i></div>
+      </div>
+      <div class="row">
+        <button class="primary" id="scoreBtn">Chấm điểm</button>
+        <label class="row small" style="margin:0;color:var(--text)"><input type="checkbox" id="auto" style="width:auto"> Tự chấm điểm lại mỗi 3 giây</label>
+      </div>
+      <div class="grid-2">
+        <div>
+          <div class="small muted">Thời gian phản hồi</div>
+          <div class="big" id="elapsed">–</div>
+        </div>
+        <div id="state" class="small"></div>
+      </div>
+      <div id="resultCard"></div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2><span>Thời gian phản hồi các lần chấm điểm</span><span class="small muted">2 phút gần nhất</span></h2>
+    <div class="small muted" id="chartMax"></div>
+    <svg class="chart" id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
+    <div class="legend"><span><i style="background:var(--ok)"></i>&lt; 3 giây</span><span><i style="background:var(--warn)"></i>3–10 giây</span><span><i style="background:var(--bad)"></i>&gt; 10 giây hoặc lỗi</span></div>
+  </section>
+</main>
+<script src="assets/app.js"></script>
+<script>
+  if (ATS.requireLogin()) {
+    ATS.renderTopbar('hr.html');
+    const $ = (id) => document.getElementById(id);
+    let cvs = [], selected = null, busy = false, startedAt = null;
+    const history = [];   // [thời điểm, ms, httpStatus]
+
+    async function loadCvs() {
+      try {
+        const res = await ATS.api('/api/v1/candidates/cvs?limit=60');
+        const data = await res.json();
+        cvs = data.items.filter(cv => cv.parseStatus === 'PARSED');
+        if (!selected && cvs.length) selected = cvs[0];
+        $('cvCount').textContent = `${cvs.length} CV`;
+        $('cvRows').innerHTML = cvs.map((cv, i) => `
+          <tr class="clickable ${selected && selected.cvId === cv.cvId ? 'selected' : ''}" data-i="${i}">
+            <td><b>${ATS.escapeHtml(cv.candidateName)}</b></td>
+            <td>${(cv.parsedData.skills || []).slice(0, 6).map(s => `<span class="chip">${ATS.escapeHtml(s)}</span>`).join('')}</td>
+            <td class="small">${cv.parsedData.yearsOfExperience ?? '–'} năm</td></tr>`).join('')
+          || '<tr><td colspan="3" class="muted">Chưa có CV nào được phân tích – nộp hồ sơ ở trang Tiếp nhận.</td></tr>';
+        $('cvRows').querySelectorAll('tr.clickable').forEach(tr => tr.onclick = () => { selected = cvs[+tr.dataset.i]; showSelected(); loadCvs(); });
+        showSelected();
+      } catch { /* thử lại ở lần sau */ }
+    }
+
+    function showSelected() {
+      if (!selected) return;
+      $('selected').innerHTML = `<b>${ATS.escapeHtml(selected.candidateName)}</b> · ${(selected.parsedData.skills || []).join(', ')}`;
+    }
+
+    async function score() {
+      if (busy || !selected) return;
+      busy = true; $('scoreBtn').disabled = true;
+      startedAt = performance.now();
+      $('state').innerHTML = '<span class="spinner"></span> Đang chấm điểm…';
+      let status = 0;
+      try {
+        const res = await ATS.api('/api/v1/cvparse/match', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cvText: ATS.cvTextFromParsed(selected), jobDescription: $('jd').value })
+        });
+        status = res.status;
+        const ms = performance.now() - startedAt;
+        const body = await res.json().catch(() => ({}));
+        if (res.ok) {
+          const color = body.score >= 70 ? 'var(--ok)' : body.score >= 40 ? 'var(--warn)' : 'var(--bad)';
+          $('resultCard').innerHTML = `
+            <div class="row" style="justify-content:space-between"><b>Điểm phù hợp</b><b style="font-size:22px">${body.score}/100</b></div>
+            <div class="score"><div style="width:${body.score}%;background:${color}"></div></div>
+            <p class="small" style="margin:10px 0 4px">Khớp: ${body.matchedSkills.map(s => `<span class="chip ok">${s}</span>`).join('') || '–'}</p>
+            <p class="small" style="margin:0 0 8px">Thiếu: ${body.missingSkills.map(s => `<span class="chip bad">${s}</span>`).join('') || '–'}</p>
+            <div class="notice">${ATS.escapeHtml(body.recommendation)}</div>`;
+          $('state').innerHTML = '<span class="badge ok">Thành công</span>';
+        } else if (res.status === 503) {
+          $('state').innerHTML = '<div class="notice warn">Hệ thống chấm điểm đang bận – thử lại sau vài giây (bulkhead từ chối ngay thay vì để HR chờ).</div>';
+        } else {
+          $('state').innerHTML = `<div class="notice bad">Lỗi ${res.status}</div>`;
+        }
+        history.push([Date.now(), ms, status]);
+      } catch (err) {
+        history.push([Date.now(), performance.now() - startedAt, 0]);
+        $('state').innerHTML = `<div class="notice bad">${ATS.escapeHtml(err.message)}</div>`;
+      } finally {
+        startedAt = null; busy = false; $('scoreBtn').disabled = false;
+      }
+    }
+
+    function colorOf(ms, status) { return status !== 200 || ms > 10000 ? 'var(--bad)' : ms > 3000 ? 'var(--warn)' : 'var(--ok)'; }
+
+    function tick() {
+      // Số giây chạy liên tục trong lúc chờ -> HR "cảm nhận" được độ trễ
+      if (startedAt !== null) {
+        const ms = performance.now() - startedAt;
+        $('elapsed').innerHTML = `<span style="color:${colorOf(ms, 200)}">${ATS.fmtMs(ms)}</span>`;
+      } else if (history.length) {
+        const [, ms, status] = history[history.length - 1];
+        $('elapsed').innerHTML = `<span style="color:${colorOf(ms, status)}">${ATS.fmtMs(ms)}</span>`;
+      }
+      const now = Date.now(), from = now - 120000;
+      const pts = history.filter(h => h[0] >= from);
+      const max = Math.max(5000, ...pts.map(h => h[1]));
+      const bars = pts.map(([t, ms, status]) => {
+        const x = (t - from) / 120000 * 600, h = Math.max(2, ms / max * 130);
+        return `<rect x="${(x - 4).toFixed(1)}" y="${(140 - h).toFixed(1)}" width="8" height="${h.toFixed(1)}" rx="2" fill="${colorOf(ms, status)}"><title>${ATS.fmtMs(ms)}</title></rect>`;
+      }).join('');
+      $('chart').innerHTML = `<line x1="0" y1="140" x2="600" y2="140" stroke="#e2e6ec"/>${bars}`;
+      $('chartMax').textContent = `Thang đo: 0 – ${(max / 1000).toFixed(0)} giây`;
+      requestAnimationFrame(tick);
+    }
+
+    $('scoreBtn').onclick = score;
+    setInterval(() => { if ($('auto').checked) score(); }, 3000);
+    loadCvs();
+    setInterval(loadCvs, 5000);
+    requestAnimationFrame(tick);
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,86 @@
+:root {
+  --bg: #f4f6f9; --card: #ffffff; --text: #18202f; --muted: #667085; --line: #e2e6ec;
+  --primary: #1d4ed8; --primary-soft: #e8eefc;
+  --ok: #16803c; --ok-soft: #e3f4e8; --bad: #c62828; --bad-soft: #fde8e8; --warn: #b45309; --warn-soft: #fdf1e1;
+  --batch: #2563eb; --interactive: #16a34a; --queue: #f59e0b; --free: #eceff3; --rabbit: #ff6600;
+}
+* { box-sizing: border-box; }
+body { margin: 0; font: 15px/1.5 system-ui, "Segoe UI", Arial, sans-serif; background: var(--bg); color: var(--text); }
+a { color: var(--primary); }
+main { max-width: 1240px; margin: 0 auto; padding: 22px 16px 48px; }
+h1 { font-size: 26px; margin: 0 0 4px; }
+h2 { font-size: 16px; margin: 0 0 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sub { color: var(--muted); margin: 0 0 18px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+
+#topbar { display: flex; align-items: center; gap: 20px; padding: 10px 20px; background: var(--card); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.brand { font-weight: 700; text-decoration: none; color: var(--text); display: flex; align-items: center; gap: 8px; }
+.logo { background: var(--primary); color: #fff; border-radius: 6px; padding: 2px 7px; font-size: 13px; }
+#topbar nav { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
+#topbar nav a { text-decoration: none; color: var(--muted); padding: 6px 12px; border-radius: 8px; }
+#topbar nav a.active { background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.who { display: flex; gap: 10px; align-items: center; color: var(--muted); font-size: 13px; }
+
+.grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
+.grid-2 { display: grid; gap: 16px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+@media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+.stack > * + * { margin-top: 16px; }
+
+label { display: block; font-size: 13px; color: var(--muted); margin: 10px 0 4px; }
+input, textarea, select { width: 100%; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; font: inherit; background: #fff; }
+textarea { min-height: 96px; resize: vertical; }
+button { font: inherit; border: 0; border-radius: 9px; padding: 9px 16px; cursor: pointer; font-weight: 600; }
+button.primary { background: var(--primary); color: #fff; }
+button.ghost { background: var(--primary-soft); color: var(--primary); }
+button.danger { background: var(--bad); color: #fff; }
+button.success { background: var(--ok); color: #fff; }
+button.link { background: none; color: var(--primary); padding: 0; font-weight: 500; }
+button:disabled { opacity: .5; cursor: not-allowed; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+
+.badge { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; background: var(--free); color: var(--muted); white-space: nowrap; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.bad { background: var(--bad-soft); color: var(--bad); }
+.badge.pending { background: var(--warn-soft); color: var(--warn); }
+.chip { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; margin: 2px; background: var(--free); }
+.chip.ok { background: var(--ok-soft); color: var(--ok); }
+.chip.bad { background: var(--bad-soft); color: var(--bad); }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 8px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 13px; }
+tr.clickable { cursor: pointer; }
+tr.clickable:hover, tr.selected { background: var(--primary-soft); }
+.tablewrap { overflow-x: auto; max-height: 460px; overflow-y: auto; }
+
+.big { font-size: 40px; font-weight: 700; line-height: 1.1; }
+.big small { font-size: 15px; color: var(--muted); font-weight: 500; }
+.good { color: var(--ok); } .warnc { color: var(--warn); } .badc { color: var(--bad); }
+.notice { padding: 10px 12px; border-radius: 10px; background: var(--primary-soft); color: var(--primary); font-size: 14px; }
+.notice.ok { background: var(--ok-soft); color: var(--ok); }
+.notice.bad { background: var(--bad-soft); color: var(--bad); }
+.notice.warn { background: var(--warn-soft); color: var(--warn); }
+
+.slots { display: flex; flex-wrap: wrap; gap: 6px; min-height: 30px; }
+.slot { width: 30px; height: 30px; border-radius: 7px; background: var(--free); transition: background .2s; }
+.slot.batch { background: var(--batch); } .slot.interactive { background: var(--interactive); }
+.slot.queue { background: var(--queue); width: 16px; height: 22px; border-radius: 4px; }
+.slot.rabbit { background: var(--rabbit); width: 12px; height: 18px; border-radius: 3px; }
+.slot.mini { width: 16px; height: 22px; border-radius: 4px; }
+.legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+
+.progress { height: 10px; background: var(--free); border-radius: 999px; overflow: hidden; }
+.progress > div { height: 100%; background: var(--primary); width: 0; transition: width .2s; }
+.score { height: 14px; background: var(--free); border-radius: 999px; overflow: hidden; }
+.score > div { height: 100%; }
+svg.chart { width: 100%; height: 150px; display: block; }
+.mode-on { color: var(--ok); } .mode-off { color: var(--bad); }
+.kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; }
+.kpi div { background: var(--bg); border-radius: 10px; padding: 10px; }
+.kpi b { display: block; font-size: 22px; }
+.kpi span { font-size: 12px; color: var(--muted); }
+.spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--primary); border-radius: 50%; animation: spin .8s linear infinite; vertical-align: -2px; }
+@keyframes spin { to { transform: rotate(360deg); } }

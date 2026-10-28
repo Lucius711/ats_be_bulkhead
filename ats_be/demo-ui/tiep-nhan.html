@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tiếp nhận hồ sơ – ATS</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<header id="topbar"></header>
+<main>
+  <h1>Tiếp nhận hồ sơ ứng viên</h1>
+  <p class="sub">Nộp hồ sơ được trả lời ngay; CV được phân tích ở nền (RabbitMQ → cv-parse-service) và trạng thái tự cập nhật.</p>
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Nộp hồ sơ</h2>
+      <form id="form">
+        <label for="fullName">Họ tên</label>
+        <input id="fullName" required>
+        <div class="grid-2">
+          <div><label for="email">Email</label><input id="email" type="email" required></div>
+          <div><label for="phone">Số điện thoại (10 số)</label><input id="phone" pattern="[0-9]{10}"></div>
+        </div>
+        <label for="file">File CV (.txt – engine hiện đọc CV dạng văn bản)</label>
+        <input id="file" type="file" accept=".txt,text/plain">
+        <p class="small muted" style="margin:4px 0 0">Không chọn file thì hệ thống tạo sẵn một CV mẫu.</p>
+        <div class="row" style="margin-top:14px">
+          <button class="primary" type="submit" id="submitBtn">Nộp hồ sơ</button>
+          <button class="link" type="button" id="fillSample">Điền dữ liệu mẫu</button>
+        </div>
+      </form>
+      <div id="result" style="margin-top:14px"></div>
+    </section>
+
+    <section class="card">
+      <h2>Mô phỏng đợt cao điểm</h2>
+      <p class="small muted" style="margin-top:0">Nhiều ứng viên nộp CV cùng lúc. Việc nộp vẫn nhanh vì CV được phân tích ở nền – xem ảnh hưởng tới HR ở trang <a href="hr.html">HR chấm điểm</a> và <a href="giam-sat.html">Giám sát</a>.</p>
+      <div class="row">
+        <label for="n" style="margin:0">Số hồ sơ</label>
+        <input id="n" type="number" value="40" min="1" max="200" style="width:90px">
+        <button class="primary" id="simulateBtn">Bắt đầu</button>
+      </div>
+      <div class="progress" style="margin-top:14px"><div id="bar"></div></div>
+      <p id="simMsg" class="small muted"></p>
+      <div class="kpi" id="counts"></div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2><span>Hồ sơ gần đây</span><span class="small muted" id="refreshed"></span></h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Ứng viên</th><th>File CV</th><th>Trạng thái</th><th>Nộp lúc</th><th>Phân tích mất</th><th>Kỹ năng trích xuất</th></tr></thead>
+        <tbody id="rows"><tr><td colspan="6" class="muted">Đang tải…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script src="assets/app.js"></script>
+<script>
+  if (ATS.requireLogin()) {
+    ATS.renderTopbar('tiep-nhan.html');
+    const $ = (id) => document.getElementById(id);
+    const mine = new Set();   // ứng viên vừa nộp từ trang này -> tô sáng trong bảng
+
+    $('fillSample').onclick = () => {
+      const c = ATS.sampleCandidate(0);
+      $('fullName').value = c.fullName; $('email').value = c.email; $('phone').value = c.phone;
+    };
+    $('fillSample').click();
+
+    $('form').onsubmit = async (e) => {
+      e.preventDefault();
+      $('submitBtn').disabled = true;
+      $('result').innerHTML = '<span class="spinner"></span> Đang gửi hồ sơ…';
+      try {
+        const chosen = $('file').files[0];
+        const sample = ATS.sampleCandidate(1);
+        const text = chosen ? null : sample.text.replace(sample.fullName, $('fullName').value);
+        const res = await ATS.uploadCv({
+          fullName: $('fullName').value, email: $('email').value, phone: $('phone').value,
+          file: chosen || new Blob([text], { type: 'text/plain' }), fileName: chosen ? chosen.name : 'cv-mau.txt'
+        });
+        if (res.ok) {
+          mine.add(res.body.id);
+          $('result').innerHTML = `<div class="notice ok">Đã nhận hồ sơ sau <b>${ATS.fmtMs(res.ms)}</b>. CV đang được phân tích ở nền – trạng thái cập nhật trong bảng bên dưới.</div>`;
+          $('fillSample').click();
+        } else {
+          $('result').innerHTML = `<div class="notice bad">Lỗi ${res.status}: ${ATS.escapeHtml(res.body.message || 'không gửi được hồ sơ')}</div>`;
+        }
+      } catch (err) {
+        $('result').innerHTML = `<div class="notice bad">${ATS.escapeHtml(err.message)}</div>`;
+      } finally {
+        $('submitBtn').disabled = false;
+        refresh();
+      }
+    };
+
+    $('simulateBtn').onclick = async () => {
+      const n = Math.max(1, Math.min(200, parseInt($('n').value, 10) || 40));
+      $('simulateBtn').disabled = true;
+      $('simMsg').textContent = `Đang gửi ${n} hồ sơ…`;
+      const r = await ATS.simulateUploads(n, {
+        onProgress: ({ done, total }) => { $('bar').style.width = (done / total * 100) + '%'; }
+      });
+      $('simMsg').innerHTML = `Đã gửi <b>${r.done - r.failed}/${n}</b> hồ sơ trong <b>${ATS.fmtMs(r.ms)}</b>${r.failed ? ` (${r.failed} lỗi)` : ''}. CV đang được phân tích ở nền.`;
+      $('simulateBtn').disabled = false;
+    };
+
+    async function refresh() {
+      try {
+        const res = await ATS.api('/api/v1/candidates/cvs?limit=30');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const c = data.counts;
+        $('counts').innerHTML = `
+          <div><b class="warnc">${c.PENDING}</b><span>Đang phân tích</span></div>
+          <div><b class="good">${c.PARSED}</b><span>Đã phân tích</span></div>
+          <div><b class="badc">${c.FAILED}</b><span>Lỗi</span></div>`;
+        $('rows').innerHTML = data.items.map(cv => {
+          const took = cv.parsedAt ? ATS.fmtMs(new Date(cv.parsedAt) - new Date(cv.uploadedAt)) : '–';
+          const skills = (cv.parsedData && cv.parsedData.skills || []).map(s => `<span class="chip">${ATS.escapeHtml(s)}</span>`).join('');
+          return `<tr class="${mine.has(cv.candidateId) ? 'selected' : ''}">
+            <td><b>${ATS.escapeHtml(cv.candidateName)}</b><div class="small muted">${ATS.escapeHtml(cv.candidateEmail)}</div></td>
+            <td class="small">${ATS.escapeHtml(cv.fileName)}</td>
+            <td>${ATS.statusBadge(cv.parseStatus)}</td>
+            <td class="small">${ATS.fmtClock(cv.uploadedAt)}</td>
+            <td class="small">${took}</td>
+            <td>${skills || '<span class="muted small">–</span>'}</td></tr>`;
+        }).join('') || '<tr><td colspan="6" class="muted">Chưa có hồ sơ</td></tr>';
+        $('refreshed').textContent = 'cập nhật ' + new Date().toLocaleTimeString('vi-VN');
+      } catch (err) {
+        $('refreshed').textContent = 'không tải được: ' + err.message;
+      }
+    }
+    refresh();
+    setInterval(refresh, 2000);
+  }
+</script>
+</body>
+</html>

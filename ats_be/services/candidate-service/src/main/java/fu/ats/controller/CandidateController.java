@@ -2,6 +2,7 @@ package fu.ats.controller;
 
 import fu.ats.dto.CandidateRequest;
 import fu.ats.dto.CandidateResponse;
+import fu.ats.dto.CvListResponse;
 import fu.ats.entity.Candidates;
 import fu.ats.service.CandidateService;
 import jakarta.validation.Valid;
@@ -46,6 +47,15 @@ public class CandidateController {
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(candidateService.saveWithCv(request, cvFile));
+    }
+
+    /** CV mới nhất kèm trạng thái parse (PENDING/PARSED/FAILED) và kết quả parse, cho HR. */
+    @GetMapping("/cvs")
+    @PreAuthorize("hasAnyRole('RECRUITER', 'ADMIN')")
+    public CvListResponse recentCvs(
+            @RequestParam(value = "limit", defaultValue = "50") int limit
+    ) {
+        return candidateService.findRecentCvs(limit);
     }
 
     @GetMapping("/{candidateId}")

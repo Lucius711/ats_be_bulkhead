@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ATS – Demo bulkhead parse CV</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<header id="topbar"></header>
+<main>
+  <h1>Hệ thống tuyển dụng ATS</h1>
+  <p class="sub">Demo Bulkhead (Resilience4j) cô lập dịch vụ parse CV chậm: đợt CV ồ ạt không được làm chậm chức năng chấm điểm của HR.</p>
+
+  <div class="grid-2">
+    <section class="card" id="loginCard">
+      <h2>Đăng nhập (Keycloak)</h2>
+      <form id="loginForm">
+        <label for="account">Tài khoản demo</label>
+        <select id="account">
+          <option value="admin|admin123">admin / admin123 – ADMIN (dùng được mọi trang)</option>
+          <option value="recruiter|recruiter123">recruiter / recruiter123 – RECRUITER (không bật/tắt bulkhead)</option>
+        </select>
+        <label for="username">Tên đăng nhập</label>
+        <input id="username" value="admin" autocomplete="username">
+        <label for="password">Mật khẩu</label>
+        <input id="password" type="password" value="admin123" autocomplete="current-password">
+        <div class="row" style="margin-top:14px">
+          <button class="primary" type="submit">Đăng nhập</button>
+          <span id="loginMsg" class="small muted"></span>
+        </div>
+      </form>
+      <div id="loggedIn" hidden>
+        <p class="notice ok">Đã đăng nhập: <b id="who"></b></p>
+        <p class="small muted">Mở 3 trang dưới đây ở 3 cửa sổ trình duyệt đặt cạnh nhau để trình diễn.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Luồng xử lý CV</h2>
+      <ol class="small" style="padding-left:18px;margin:0">
+        <li><b>Tiếp nhận hồ sơ</b>: candidate-service lưu CV vào MinIO, gửi lệnh parse qua RabbitMQ và trả lời ngay.</li>
+        <li><b>cv-parse-service</b> nhận lệnh, phân tích CV trên ngăn <b>ThreadPool bulkhead</b> (bất đồng bộ), gửi kết quả lại qua RabbitMQ.</li>
+        <li><b>HR chấm điểm CV</b> theo JD: API đồng bộ, đi qua ngăn <b>Semaphore bulkhead</b> riêng.</li>
+        <li>Engine phân tích chỉ chạy được <b>5 việc cùng lúc</b>: bulkhead chia 3 cho parse hàng loạt, giữ 2 cho HR.</li>
+      </ol>
+    </section>
+  </div>
+
+  <div class="grid" style="margin-top:16px">
+    <a class="card" href="tiep-nhan.html" style="text-decoration:none;color:inherit">
+      <h2>1. Tiếp nhận hồ sơ</h2>
+      <p class="small muted">Gửi hồ sơ kèm CV, xem trạng thái phân tích tự cập nhật. Có nút mô phỏng đợt cao điểm (40 hồ sơ).</p>
+    </a>
+    <a class="card" href="hr.html" style="text-decoration:none;color:inherit">
+      <h2>2. HR chấm điểm CV</h2>
+      <p class="small muted">Chọn CV, chấm điểm theo mô tả công việc. Đây là chức năng không được phép bị chậm.</p>
+    </a>
+    <a class="card" href="giam-sat.html" style="text-decoration:none;color:inherit">
+      <h2>3. Giám sát bulkhead</h2>
+      <p class="small muted">Bật/tắt bulkhead, xem engine, 2 ngăn bulkhead, hàng đợi RabbitMQ và thời gian phản hồi của HR.</p>
+    </a>
+  </div>
+</main>
+<script src="assets/app.js"></script>
+<script>
+  ATS.renderTopbar('index.html');
+  const next = new URLSearchParams(location.search).get('next');
+
+  function showLoggedIn() {
+    const user = ATS.currentUser();
+    document.getElementById('loginForm').hidden = !!user;
+    document.getElementById('loggedIn').hidden = !user;
+    if (user) document.getElementById('who').textContent = `${user.username} (${user.roles.join(', ')})`;
+  }
+
+  document.getElementById('account').onchange = (e) => {
+    const [u, p] = e.target.value.split('|');
+    document.getElementById('username').value = u;
+    document.getElementById('password').value = p;
+  };
+
+  document.getElementById('loginForm').onsubmit = async (e) => {
+    e.preventDefault();
+    const msg = document.getElementById('loginMsg');
+    msg.textContent = 'Đang đăng nhập…';
+    try {
+      await ATS.login(document.getElementById('username').value, document.getElementById('password').value);
+      if (next) { location.href = next; return; }
+      ATS.renderTopbar('index.html');
+      showLoggedIn();
+      msg.textContent = '';
+    } catch (err) {
+      msg.textContent = err.message;
+    }
+  };
+  showLoggedIn();
+</script>
+</body>
+</html>

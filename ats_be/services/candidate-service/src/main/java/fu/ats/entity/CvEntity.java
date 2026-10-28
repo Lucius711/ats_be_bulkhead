@@ -62,4 +62,8 @@ public class CvEntity{
 
     @Column(name = "uploaded_at", columnDefinition = "timestamptz")
     private OffsetDateTime uploadedAt;
+
+    /** Thời điểm nhận kết quả parse từ cv-parse-service (PARSED hoặc FAILED). */
+    @Column(name = "parsed_at", columnDefinition = "timestamptz")
+    private OffsetDateTime parsedAt;
 }

@@ -3,6 +3,8 @@ package fu.ats.service;
 import fu.ats.dto.CandidateRequest;
 import fu.ats.config.CandidateProperties;
 import fu.ats.dto.CandidateResponse;
+import fu.ats.dto.CvListResponse;
+import fu.ats.dto.CvSummaryResponse;
 import fu.ats.entity.CandidateSkillId;
 import fu.ats.entity.CandidateSkills;
 import fu.ats.entity.CandidateStatus;
@@ -22,6 +24,7 @@ import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
 import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
@@ -30,8 +33,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.EnumMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -141,6 +146,32 @@ public class CandidateServiceImpl implements CandidateService {
                     exception
             );
         }
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public CvListResponse findRecentCvs(int limit) {
+        int size = Math.max(1, Math.min(limit, 200));
+        Map<ParseStatus, Long> counts = new EnumMap<>(ParseStatus.class);
+        for (ParseStatus status : ParseStatus.values()) {
+            counts.put(status, cvEntityRepository.countByParseStatus(status));
+        }
+        List<CvSummaryResponse> items = cvEntityRepository
+                .findAllByOrderByUploadedAtDesc(PageRequest.of(0, size))
+                .stream()
+                .map(cv -> new CvSummaryResponse(
+                        cv.getId(),
+                        cv.getCandidate().getId(),
+                        cv.getCandidate().getFullName(),
+                        cv.getCandidate().getEmail(),
+                        cv.getFilePath(),
+                        cv.getParseStatus(),
+                        cv.getUploadedAt(),
+                        cv.getParsedAt(),
+                        cv.getParsedData()
+                ))
+                .toList();
+        return new CvListResponse(counts, items);
     }
 
     private Candidates saveCandidateAndSkills(CandidateRequest request) {

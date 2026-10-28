@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Giám sát bulkhead – ATS</title>
+<link rel="stylesheet" href="assets/app.css">
+</head>
+<body>
+<header id="topbar"></header>
+<main>
+  <h1>Giám sát bulkhead – cv-parse-service</h1>
+  <p class="sub">Engine phân tích chỉ chạy được 5 việc cùng lúc. Bulkhead chia ngăn: 3 cho parse CV hàng loạt (ThreadPool, bất đồng bộ), giữ 2 cho HR (Semaphore, đồng bộ).</p>
+
+  <section class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="row">
+        <div>
+          <div class="small muted">Bulkhead</div>
+          <div class="big" id="mode">–</div>
+        </div>
+        <button class="success" id="onBtn">Bật bulkhead</button>
+        <button class="danger" id="offBtn">Tắt bulkhead</button>
+      </div>
+      <div class="row">
+        <label for="n" style="margin:0">Đợt cao điểm</label>
+        <input id="n" type="number" value="40" min="1" max="200" style="width:80px">
+        <button class="primary" id="simulateBtn">Mô phỏng nộp CV</button>
+      </div>
+    </div>
+    <div class="progress" style="margin-top:12px"><div id="bar"></div></div>
+    <p id="simMsg" class="small muted" style="margin-bottom:0"></p>
+  </section>
+
+  <div class="grid" style="margin-top:16px">
+    <section class="card">
+      <h2><span>Engine phân tích</span><span class="small muted" id="engineTxt"></span></h2>
+      <div class="slots" id="engine"></div>
+      <p class="small" id="engineWait" style="margin:10px 0 0"></p>
+      <div class="legend"><span><i style="background:var(--batch)"></i>Parse hàng loạt</span><span><i style="background:var(--interactive)"></i>HR chấm điểm</span><span><i style="background:var(--free)"></i>Trống</span></div>
+    </section>
+
+    <section class="card">
+      <h2><span>Ngăn ThreadPool <span class="badge">cvParseBatch</span></span><span class="small muted">bất đồng bộ</span></h2>
+      <div id="batchOn">
+        <div class="small muted">Worker riêng đang parse</div>
+        <div class="slots" id="workers"></div>
+        <div class="small muted" style="margin-top:10px">Hàng đợi của ngăn <b id="queueTxt"></b></div>
+        <div class="slots" id="queue"></div>
+      </div>
+      <div id="batchOff" hidden>
+        <div class="notice bad">Không có bulkhead: mỗi tin nhắn một thread, không giới hạn.</div>
+        <div class="big" style="margin-top:10px" id="unbounded">0 <small>thread đang parse</small></div>
+      </div>
+      <div class="small muted" style="margin-top:12px">Tin nhắn chờ trong RabbitMQ (ats.cv.parse.q) <b id="rabbitTxt"></b></div>
+      <div class="slots" id="rabbit"></div>
+    </section>
+
+    <section class="card">
+      <h2><span>Ngăn Semaphore <span class="badge">cvParseInteractive</span></span><span class="small muted">đồng bộ</span></h2>
+      <div class="small muted">Permit HR đang dùng</div>
+      <div class="slots" id="permits"></div>
+      <p class="small muted" id="semaOn">Đầy quá 0,5 giây → trả 503 "thử lại sau" ngay, không để HR treo.</p>
+      <div class="notice bad small" id="semaOff" hidden style="margin:10px 0">Không có bulkhead: yêu cầu của HR không có ngăn riêng – phải xếp hàng chung với parse hàng loạt ở engine.</div>
+      <div class="kpi" id="counts"></div>
+    </section>
+  </div>
+
+  <section class="card" style="margin-top:16px">
+    <h2>
+      <span>HR chấm điểm CV – thời gian phản hồi</span>
+      <label class="row small" style="margin:0;color:var(--text)"><input type="checkbox" id="probe" checked style="width:auto"> Đo liên tục (mô phỏng 1 HR đang dùng hệ thống)</label>
+    </h2>
+    <div class="row" style="align-items:flex-end;gap:24px">
+      <div><div class="small muted">Lần gần nhất</div><div class="big" id="probeNow">–</div></div>
+      <div class="small muted" id="probeState"></div>
+    </div>
+    <div class="small muted" id="chartMax"></div>
+    <svg class="chart" id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
+    <div class="legend"><span><i style="background:var(--ok)"></i>&lt; 3 giây</span><span><i style="background:var(--warn)"></i>3–10 giây</span><span><i style="background:var(--bad)"></i>&gt; 10 giây hoặc lỗi</span><span>Nền tô: <i style="background:#fde8e8"></i>bulkhead tắt · <i style="background:#e3f4e8"></i>bulkhead bật</span></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
+    <h2><span>So sánh các lượt mô phỏng</span><button class="link small" id="clearRuns">Xoá bảng</button></h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Bulkhead</th><th>Số CV</th><th>Nộp hồ sơ xong sau</th><th>HR chấm điểm chậm nhất</th><th>HR trung bình</th><th>HR bị 503</th><th>Parse hết CV sau</th></tr></thead>
+        <tbody id="runs"><tr><td colspan="7" class="muted">Chưa có lượt nào – bấm "Mô phỏng nộp CV".</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+<script src="assets/app.js"></script>
+<script>
+  if (ATS.requireLogin()) {
+    ATS.renderTopbar('giam-sat.html');
+    const $ = (id) => document.getElementById(id);
+    const PROBE_BODY = JSON.stringify({
+      cvText: 'Backend Developer 4 years experience. Skills: Java, Spring Boot, PostgreSQL, Docker, Git',
+      jobDescription: 'Java, Spring Boot, PostgreSQL, Docker, Kubernetes, Kafka'
+    });
+    let status = null, counts = null, run = null;
+    // Bảng so sánh được giữ lại khi tải lại trang (chỉ trong trình duyệt này)
+    const RUNS_KEY = 'ats-demo-runs';
+    const runs = (() => { try { return JSON.parse(localStorage.getItem(RUNS_KEY)) || []; } catch { return []; } })();
+    const saveRuns = () => { try { localStorage.setItem(RUNS_KEY, JSON.stringify(runs)); } catch { /* bỏ qua */ } };
+    const probes = [];        // [thời điểm, ms, httpStatus, bulkheadBật]
+    let probeStarted = null;
+
+    const slots = (total, filled, cls, extra = '') =>
+      Array.from({ length: total }, (_, i) => `<div class="slot ${extra} ${i < filled ? cls : ''}"></div>`).join('');
+
+    async function loadStatus() {
+      try {
+        const res = await ATS.api('/api/v1/cvparse/bulkhead');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        status = await res.json();
+        render();
+      } catch (err) { $('engineTxt').textContent = 'không đọc được: ' + err.message; }
+    }
+
+    async function loadCounts() {
+      try {
+        const res = await ATS.api('/api/v1/candidates/cvs?limit=1');
+        counts = (await res.json()).counts;
+        $('counts').innerHTML = `
+          <div><b class="warnc">${counts.PENDING}</b><span>CV đang phân tích</span></div>
+          <div><b class="good">${counts.PARSED}</b><span>Đã phân tích</span></div>
+          <div><b class="badc">${counts.FAILED}</b><span>Lỗi</span></div>`;
+        maybeFinishRun();
+      } catch { /* thử lại lần sau */ }
+    }
+
+    function render() {
+      const s = status, e = s.engine;
+      $('mode').innerHTML = s.bulkheadEnabled ? '<span class="mode-on">ĐANG BẬT</span>' : '<span class="mode-off">ĐANG TẮT</span>';
+      // Không cho đổi chế độ giữa một lượt mô phỏng (kết quả lượt đó sẽ bị trộn 2 chế độ)
+      $('onBtn').disabled = s.bulkheadEnabled || !s.toggleEnabled || !!run;
+      $('offBtn').disabled = !s.bulkheadEnabled || !s.toggleEnabled || !!run;
+      $('semaOn').hidden = !s.bulkheadEnabled;
+      $('semaOff').hidden = s.bulkheadEnabled;
+
+      const used = e.batchRunning + e.interactiveRunning;
+      $('engineTxt').textContent = `${used}/${e.capacity} slot · parse ${e.parseDelayMs / 1000}s · chấm điểm ${e.matchDelayMs / 1000}s`;
+      $('engine').innerHTML = Array.from({ length: e.capacity }, (_, i) =>
+        `<div class="slot ${i < e.batchRunning ? 'batch' : i < used ? 'interactive' : ''}" style="width:46px;height:46px"></div>`).join('');
+      $('engineWait').innerHTML = `Đang xếp hàng chờ engine: <b>${e.batchWaiting}</b> việc parse · <b class="${e.interactiveWaiting ? 'badc' : ''}">${e.interactiveWaiting}</b> yêu cầu của HR`;
+
+      $('batchOn').hidden = !s.bulkheadEnabled;
+      $('batchOff').hidden = s.bulkheadEnabled;
+      const b = s.batchBulkhead;
+      $('workers').innerHTML = slots(b.maxThreads, b.activeThreads, 'batch');
+      $('queue').innerHTML = slots(b.queueCapacity, b.queueDepth, 'queue', 'mini');
+      $('queueTxt').textContent = `${b.queueDepth}/${b.queueCapacity}`;
+      $('unbounded').innerHTML = `${s.unboundedActive} <small>thread đang parse</small>`;
+      const ready = Math.max(0, s.rabbitParseQueueReady);
+      $('rabbitTxt').textContent = `${ready}`;
+      $('rabbit').innerHTML = slots(Math.min(ready, 60), Math.min(ready, 60), 'rabbit', 'rabbit');
+
+      const i = s.interactiveBulkhead;
+      $('permits').innerHTML = slots(i.maxConcurrentCalls, i.maxConcurrentCalls - i.availableConcurrentCalls, 'interactive');
+    }
+
+    async function setMode(enabled) {
+      const res = await ATS.api('/api/v1/cvparse/bulkhead/mode', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled })
+      });
+      if (!res.ok) alert('Không đổi được chế độ (cần tài khoản ADMIN): HTTP ' + res.status);
+      loadStatus();
+    }
+    $('onBtn').onclick = () => setMode(true);
+    $('offBtn').onclick = () => setMode(false);
+
+    // ---------------------------------------------------------------- mô phỏng + ghi nhận lượt
+    $('simulateBtn').onclick = async () => {
+      if (run) return;
+      const n = Math.max(1, Math.min(200, parseInt($('n').value, 10) || 40));
+      run = { mode: status ? status.bulkheadEnabled : null, n, start: Date.now(), uploadMs: null };
+      $('simulateBtn').disabled = true; $('onBtn').disabled = true; $('offBtn').disabled = true;
+      $('simMsg').textContent = `Đang gửi ${n} hồ sơ…`;
+      const r = await ATS.simulateUploads(n, { onProgress: ({ done, total }) => { $('bar').style.width = (done / total * 100) + '%'; } });
+      run.uploadMs = r.ms;
+      $('simMsg').innerHTML = `Đã nộp <b>${r.done - r.failed}/${n}</b> hồ sơ trong <b>${ATS.fmtMs(r.ms)}</b>. Đang chờ cv-parse-service phân tích hết…`;
+    };
+
+    function maybeFinishRun() {
+      if (!run || run.uploadMs === null || !counts || !status) return;
+      const idle = counts.PENDING === 0 && status.engine.batchRunning === 0;
+      if (!idle) return;
+      const during = probes.filter(p => p[0] >= run.start);
+      const ok = during.filter(p => p[2] === 200).map(p => p[1]);
+      const row = {
+        mode: run.mode, n: run.n, uploadMs: run.uploadMs, total: Date.now() - run.start,
+        max: during.length ? Math.max(...during.map(p => p[1])) : null,
+        avg: ok.length ? ok.reduce((a, b) => a + b, 0) / ok.length : null,
+        busy: during.filter(p => p[2] === 503).length
+      };
+      runs.push(row);
+      saveRuns();
+      renderRuns();
+      $('simMsg').innerHTML = `Xong lượt <b>${row.mode ? 'bulkhead BẬT' : 'bulkhead TẮT'}</b>: phân tích hết ${row.n} CV sau ${ATS.fmtMs(row.total)}.`;
+      $('bar').style.width = '0';
+      $('simulateBtn').disabled = false;
+      run = null;
+      loadStatus();
+    }
+
+    function renderRuns() {
+      $('runs').innerHTML = runs.map(x => `<tr>
+        <td>${x.mode ? '<span class="badge ok">Bật</span>' : '<span class="badge bad">Tắt</span>'}</td>
+        <td>${x.n}</td><td>${ATS.fmtMs(x.uploadMs)}</td>
+        <td><b>${x.max === null ? '–' : ATS.fmtMs(x.max)}</b></td><td>${x.avg === null ? '–' : ATS.fmtMs(x.avg)}</td>
+        <td>${x.busy}</td><td>${ATS.fmtMs(x.total)}</td></tr>`).join('')
+        || '<tr><td colspan="7" class="muted">Chưa có lượt nào – bấm "Mô phỏng nộp CV".</td></tr>';
+    }
+    $('clearRuns').onclick = () => { runs.length = 0; saveRuns(); renderRuns(); };
+    renderRuns();
+
+    // ---------------------------------------------------------------- đo HR liên tục
+    async function probeLoop() {
+      while (true) {
+        if (!$('probe').checked) { await ATS.sleep(500); continue; }
+        probeStarted = performance.now();
+        const mode = status ? status.bulkheadEnabled : null;
+        let code = 0;
+        try {
+          const res = await ATS.api('/api/v1/cvparse/match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: PROBE_BODY });
+          code = res.status; await res.text();
+        } catch { code = 0; }
+        probes.push([Date.now(), performance.now() - probeStarted, code, mode]);
+        probeStarted = null;
+        await ATS.sleep(1500);
+      }
+    }
+
+    const colorOf = (ms, code) => code !== 200 || ms > 10000 ? 'var(--bad)' : ms > 3000 ? 'var(--warn)' : 'var(--ok)';
+
+    function tick() {
+      const waiting = probeStarted !== null ? performance.now() - probeStarted : null;
+      const last = probes[probes.length - 1];
+      if (waiting !== null && waiting > 2600) {
+        $('probeNow').innerHTML = `<span style="color:${colorOf(waiting, 200)}">${ATS.fmtMs(waiting)}</span>`;
+        $('probeState').innerHTML = '<span class="spinner"></span> HR đang chờ kết quả…';
+      } else if (last) {
+        $('probeNow').innerHTML = `<span style="color:${colorOf(last[1], last[2])}">${ATS.fmtMs(last[1])}</span>`;
+        $('probeState').textContent = last[2] === 503 ? 'Bị từ chối nhanh (503) – hệ thống bận' : last[2] === 200 ? '' : 'Lỗi ' + last[2];
+      }
+      const now = Date.now(), from = now - 180000, W = 600;
+      const pts = probes.filter(p => p[0] >= from);
+      if (waiting !== null) pts.push([now, waiting, 200, status && status.bulkheadEnabled]);
+      const max = Math.max(5000, ...pts.map(p => p[1]));
+      // nền: tô theo chế độ bulkhead tại từng thời điểm
+      const bands = pts.map((p, idx) => {
+        const x0 = (p[0] - from) / 180000 * W, x1 = idx + 1 < pts.length ? (pts[idx + 1][0] - from) / 180000 * W : W;
+        return p[3] === null ? '' : `<rect x="${x0.toFixed(1)}" y="0" width="${Math.max(0, x1 - x0).toFixed(1)}" height="140" fill="${p[3] ? '#e3f4e8' : '#fde8e8'}" opacity=".7"/>`;
+      }).join('');
+      const bars = pts.map(([t, ms, code]) => {
+        const x = (t - from) / 180000 * W, h = Math.max(2, ms / max * 130);
+        return `<rect x="${(x - 3).toFixed(1)}" y="${(140 - h).toFixed(1)}" width="6" height="${h.toFixed(1)}" rx="2" fill="${colorOf(ms, code)}"/>`;
+      }).join('');
+      $('chart').innerHTML = `${bands}<line x1="0" y1="140" x2="${W}" y2="140" stroke="#e2e6ec"/>${bars}`;
+      $('chartMax').textContent = `Thang đo: 0 – ${(max / 1000).toFixed(0)} giây · 3 phút gần nhất`;
+      requestAnimationFrame(tick);
+    }
+
+    loadStatus(); loadCounts();
+    setInterval(loadStatus, 1000);
+    setInterval(loadCounts, 2000);
+    probeLoop();
+    requestAnimationFrame(tick);
+  }
+</script>
+</body>
+</html>
