@@ -1,6 +1,8 @@
 package fu.ats.messaging;
 
+import fu.ats.config.CvParseProperties;
 import fu.ats.shared.commonweb.messaging.rabbitmq.RabbitMessagingNames;
+import org.springframework.amqp.core.AcknowledgeMode;
 import org.springframework.amqp.core.Binding;
 import org.springframework.amqp.core.Binding.DestinationType;
 import org.springframework.amqp.core.DirectExchange;
@@ -117,12 +119,17 @@ public class CvParseRabbitConfiguration {
     @Bean
     SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
             ConnectionFactory connectionFactory,
-            MessageConverter rabbitMessageConverter
+            MessageConverter rabbitMessageConverter,
+            CvParseProperties properties
     ) {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(rabbitMessageConverter);
         factory.setDefaultRequeueRejected(false);
+        // Listener trả về CompletableFuture: MANUAL để container chỉ ack khi parse xong (không ack ngay khi nhận).
+        factory.setAcknowledgeMode(AcknowledgeMode.MANUAL);
+        // Tối đa bấy nhiêu tin nhắn chưa ack được giao cho service; phần còn lại chờ trong RabbitMQ.
+        factory.setPrefetchCount(properties.batch().prefetch());
         return factory;
     }
 }

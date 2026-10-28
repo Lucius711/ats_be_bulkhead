@@ -8,3 +8,39 @@ cv-parse:
     access-key: ${MINIO_ACCESS_KEY:admin}
     secret-key: ${MINIO_SECRET_KEY:admin123}
     bucket: ${MINIO_BUCKET:ats-cv}
+  # Engine phân tích (mô phỏng OCR/AI): chỉ chạy được `capacity` việc cùng lúc.
+  # Độ trễ mặc định 0s; docker-compose.demo.yml đặt 8s/2s để mô phỏng engine chậm.
+  engine:
+    capacity: ${CV_PARSE_ENGINE_CAPACITY:5}
+    parse-delay: ${CV_PARSE_DELAY:0s}
+    match-delay: ${CV_MATCH_DELAY:0s}
+  batch:
+    prefetch: 20                 # tối đa 20 tin nhắn chưa ack trong service; phần còn lại chờ trong RabbitMQ
+  bulkhead:
+    enabled: true
+    toggle-enabled: ${CV_PARSE_BULKHEAD_TOGGLE:false}   # chỉ bật khi demo so sánh trước/sau
+
+# ============================================================
+# BULKHEAD (Resilience4j) – chia ngăn engine 5 slot = 3 (hàng loạt) + 2 (HR)
+# ============================================================
+resilience4j:
+  # Parse CV hàng loạt từ RabbitMQ – bất đồng bộ – chạy trên pool riêng "bulkhead-cvParseBatch-*"
+  thread-pool-bulkhead:
+    instances:
+      cvParseBatch:
+        core-thread-pool-size: 3
+        max-thread-pool-size: 3
+        queue-capacity: 17         # = prefetch - max-thread-pool-size -> không bao giờ tràn ngăn
+        keep-alive-duration: 20ms
+  # API đồng bộ cho HR (analyze/match) – chạy trên thread của request, được giữ riêng 2 slot engine
+  bulkhead:
+    instances:
+      cvParseInteractive:
+        max-concurrent-calls: 2
+        max-wait-duration: 500ms   # chờ tối đa 0.5s, quá thì 503 "thử lại sau" thay vì treo
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,bulkheads

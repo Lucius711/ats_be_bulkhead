@@ -1,0 +1,23 @@
+# Override CHỈ DÙNG KHI DEMO bulkhead cho cv-parse-service.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --build
+#
+# - Engine phân tích chậm (mô phỏng OCR/AI): parse CV 8s, chấm điểm CV-JD 2s.
+# - Cho phép bật/tắt bulkhead lúc chạy (PUT /api/v1/cvparse/bulkhead/mode) để so sánh trước/sau.
+# - Giao diện demo ở http://localhost:3000 (origin đã được cấu hình cho client "ats-web" trong Keycloak).
+services:
+  cv-parse-service:
+    environment:
+      CV_PARSE_DELAY: 8s
+      CV_MATCH_DELAY: 2s
+      CV_PARSE_BULKHEAD_TOGGLE: "true"
+
+  demo-ui:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./demo-ui:/usr/share/nginx/html:ro
+    depends_on:
+      - api-gateway
