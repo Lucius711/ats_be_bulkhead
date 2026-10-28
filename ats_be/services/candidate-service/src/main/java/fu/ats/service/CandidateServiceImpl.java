@@ -24,6 +24,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDate;
@@ -114,8 +116,19 @@ public class CandidateServiceImpl implements CandidateService {
                     cvFile.getContentType()
             );
 
-           // publish
-            rabbitTemplate.convertAndSend(RabbitMessagingNames.CV_RESULT_ROUTING_KEY, command);
+            // Gửi lệnh parse SAU KHI transaction commit: tránh cv-parse-service trả kết quả về
+            // trước khi CV có trong DB. Phải gửi qua CV_EXCHANGE với routing key của LỆNH parse
+            // (trước đây gửi CV_RESULT_ROUTING_KEY vào exchange mặc định -> RabbitMQ bỏ tin nhắn).
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    rabbitTemplate.convertAndSend(
+                            RabbitMessagingNames.CV_EXCHANGE,
+                            RabbitMessagingNames.CV_PARSE_ROUTING_KEY,
+                            command
+                    );
+                }
+            });
 
             return candidateMapper.toDto(candidate);
 
