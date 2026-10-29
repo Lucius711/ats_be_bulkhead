@@ -59,6 +59,7 @@
       <div class="flow-cell lane-hr arrow">
         <b>HR bấm "Chấm điểm"</b>
         <div class="small muted">mỗi lần chiếm 1 chỗ của máy trong <span id="matchCost">2 s</span> – HR đứng chờ trên màn hình</div>
+        <label class="switch"><input type="checkbox" id="probeTop"><span></span> HR chấm liên tục <span class="small muted">(1 HR, ~1,5 s/lần)</span></label>
         <div class="small" style="margin-top:8px" id="hrSrc"></div>
       </div>
       <div class="flow-cell lane-hr arrow" id="gateHr"></div>
@@ -91,7 +92,7 @@
   <section class="card" style="margin-top:16px">
     <h2>
       <span>HR chấm điểm CV – thời gian phản hồi</span>
-      <label class="row small" style="margin:0;color:var(--text)"><input type="checkbox" id="probe" checked style="width:auto"> Đo liên tục (mô phỏng 1 HR đang dùng hệ thống)</label>
+      <label class="row small" style="margin:0;color:var(--text)"><input type="checkbox" id="probe" style="width:auto"> Đo liên tục (mô phỏng 1 HR đang dùng hệ thống)</label>
     </h2>
     <div class="row" style="align-items:flex-end;gap:24px">
       <div><div class="small muted">Lần gần nhất</div><div class="big" id="probeNow">–</div></div>
@@ -340,6 +341,16 @@
     };
 
     // ---------------------------------------------------------------- đo HR liên tục
+    // Công tắc ở sơ đồ và ô ở biểu đồ là một; nhớ lựa chọn khi tải lại trang (mặc định: bật)
+    const PROBE_KEY = 'ats-demo-probe';
+    const setProbe = (on) => {
+      $('probe').checked = $('probeTop').checked = on;
+      try { localStorage.setItem(PROBE_KEY, on ? '1' : '0'); } catch { /* bỏ qua */ }
+    };
+    setProbe((() => { try { return localStorage.getItem(PROBE_KEY) !== '0'; } catch { return true; } })());
+    $('probe').onchange = () => setProbe($('probe').checked);
+    $('probeTop').onchange = () => setProbe($('probeTop').checked);
+
     async function probeLoop() {
       while (true) {
         if (!$('probe').checked || bursting) { await ATS.sleep(500); continue; }
