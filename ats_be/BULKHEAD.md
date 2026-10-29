@@ -64,6 +64,8 @@ giao diện ở **http://localhost:3000** (đăng nhập `admin / admin123`).
    tin nhắn chờ trong RabbitMQ giảm dần, HR luôn **~2 giây**.
 3. Bảng **So sánh các lượt** đặt 2 lượt cạnh nhau.
 
+Kịch bản đầy đủ có lời thoại, giải thích màn hình và đi code từng phần: [docs/KICH-BAN-DEMO.md](docs/KICH-BAN-DEMO.md).
+
 ### Kết quả đo thật (40 CV cùng lúc)
 
 | | Tắt bulkhead | Bật bulkhead |
