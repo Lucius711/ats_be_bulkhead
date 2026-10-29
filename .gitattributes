@@ -1,0 +1,2 @@
+# Script bash phải giữ LF, nếu không Git Bash trên Windows báo lỗi 
+*.sh text eol=lf
