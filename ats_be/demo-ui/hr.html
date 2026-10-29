@@ -167,7 +167,7 @@
       $('burstMsg').innerHTML = `<span class="spinner"></span> ${n} HR đang chấm điểm cùng lúc…`;
       const results = await ATS.burstMatch(n, JSON.stringify({ cvText: ATS.cvTextFromParsed(selected), jobDescription: $('jd').value }));
       const now = Date.now();
-      results.forEach(r => history.push([now, r.ms, r.status]));
+      results.forEach((r, i) => history.push([now - (results.length - 1 - i) * 600, r.ms, r.status]));   // dàn cột ra để thấy đủ N cột
       ATS.renderBurst($('burstResult'), results);
       $('burstMsg').textContent = `Lượt vừa rồi: ${n} HR cùng lúc chấm CV của ${selected.candidateName}.`;
       busy = false; $('scoreBtn').disabled = false; $('burstBtn').disabled = false;
