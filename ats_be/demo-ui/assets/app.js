@@ -146,12 +146,12 @@ const ATS = (() => {
   });
 
   /** n HR bấm "Chấm điểm" CÙNG LÚC: gửi n request /match song song, trả về kết quả từng request. */
-  function burstMatch(n) {
+  function burstMatch(n, body = BURST_BODY) {
     return Promise.all(Array.from({ length: n }, async (_, index) => {
       const started = performance.now();
       try {
         const res = await api('/api/v1/cvparse/match', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: BURST_BODY
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body
         });
         await res.text();
         return { hr: index + 1, status: res.status, ms: performance.now() - started };

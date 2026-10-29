@@ -48,6 +48,17 @@
   </div>
 
   <section class="card" style="margin-top:16px">
+    <h2><span>Test ngăn Semaphore – nhiều HR chấm điểm cùng lúc</span><span class="small muted">2 permit · chờ tối đa 0,5 giây</span></h2>
+    <div class="row">
+      <label for="burstN" style="margin:0">Số HR bấm cùng lúc</label>
+      <input id="burstN" type="number" min="1" max="6" value="5" style="width:80px">
+      <button class="primary" id="burstBtn">Nhiều HR chấm điểm cùng lúc</button>
+      <span class="small muted" id="burstMsg">Gửi N yêu cầu chấm CV đang chọn song song. Bật/tắt bulkhead ở trang Giám sát để so sánh.</span>
+    </div>
+    <div id="burstResult" style="margin-top:12px"></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
     <h2><span>Thời gian phản hồi các lần chấm điểm</span><span class="small muted">2 phút gần nhất</span></h2>
     <div class="small muted" id="chartMax"></div>
     <svg class="chart" id="chart" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
@@ -144,6 +155,23 @@
       $('chartMax').textContent = `Thang đo: 0 – ${(max / 1000).toFixed(0)} giây`;
       requestAnimationFrame(tick);
     }
+
+    // Nhiều HR bấm cùng lúc -> thấy ngăn Semaphore cho 2 người chạy, số còn lại 503 sau ~0,5s
+    $('burstBtn').onclick = async () => {
+      if (!selected) return;
+      const n = Math.max(1, Math.min(6, parseInt($('burstN').value, 10) || 5));
+      $('burstBtn').disabled = true;
+      $('burstMsg').innerHTML = '<span class="spinner"></span> Chờ lần chấm điểm hiện tại xong…';
+      while (busy) await ATS.sleep(100);
+      busy = true; $('scoreBtn').disabled = true;   // không để lần tự chấm giữ mất 1 permit
+      $('burstMsg').innerHTML = `<span class="spinner"></span> ${n} HR đang chấm điểm cùng lúc…`;
+      const results = await ATS.burstMatch(n, JSON.stringify({ cvText: ATS.cvTextFromParsed(selected), jobDescription: $('jd').value }));
+      const now = Date.now();
+      results.forEach(r => history.push([now, r.ms, r.status]));
+      ATS.renderBurst($('burstResult'), results);
+      $('burstMsg').textContent = `Lượt vừa rồi: ${n} HR cùng lúc chấm CV của ${selected.candidateName}.`;
+      busy = false; $('scoreBtn').disabled = false; $('burstBtn').disabled = false;
+    };
 
     $('scoreBtn').onclick = score;
     setInterval(() => { if ($('auto').checked) score(); }, 3000);
