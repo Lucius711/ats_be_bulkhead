@@ -67,6 +67,17 @@
   </div>
 
   <section class="card" style="margin-top:16px">
+    <h2><span>Test ngăn Semaphore – nhiều HR chấm điểm cùng lúc</span><span class="small muted">POST /api/v1/cvparse/match × N song song</span></h2>
+    <div class="row">
+      <label for="burstN" style="margin:0">Số HR bấm cùng lúc</label>
+      <input id="burstN" type="number" min="1" max="6" value="5" style="width:80px">
+      <button class="primary" id="burstBtn">Nhiều HR chấm điểm cùng lúc</button>
+      <span class="small muted" id="burstMsg">Ngăn có 2 permit, chờ tối đa 0,5 giây. Tối đa 6 vì trình duyệt chỉ mở ~6 kết nối song song tới 1 máy chủ.</span>
+    </div>
+    <div id="burstResult" style="margin-top:12px"></div>
+  </section>
+
+  <section class="card" style="margin-top:16px">
     <h2>
       <span>HR chấm điểm CV – thời gian phản hồi</span>
       <label class="row small" style="margin:0;color:var(--text)"><input type="checkbox" id="probe" checked style="width:auto"> Đo liên tục (mô phỏng 1 HR đang dùng hệ thống)</label>
@@ -216,10 +227,28 @@
     $('clearRuns').onclick = () => { runs.length = 0; saveRuns(); renderRuns(); };
     renderRuns();
 
+    // ---------------------------------------------------------------- test ngăn Semaphore
+    let bursting = false;     // tạm dừng đo HR liên tục để nó không giữ 1 permit trong lúc test
+    $('burstBtn').onclick = async () => {
+      if (bursting) return;
+      const n = Math.max(1, Math.min(6, parseInt($('burstN').value, 10) || 5));
+      bursting = true;
+      $('burstBtn').disabled = true;
+      $('burstMsg').innerHTML = '<span class="spinner"></span> Chờ lượt đo HR hiện tại xong…';
+      while (probeStarted !== null) await ATS.sleep(100);
+      const mode = status ? status.bulkheadEnabled : null;
+      $('burstMsg').innerHTML = `<span class="spinner"></span> ${n} HR đang chấm điểm cùng lúc (bulkhead ${mode ? 'BẬT' : 'TẮT'})…`;
+      const results = await ATS.burstMatch(n);
+      ATS.renderBurst($('burstResult'), results);
+      $('burstMsg').textContent = `Lượt vừa rồi: bulkhead ${mode ? 'BẬT' : 'TẮT'}, ${n} HR cùng lúc. Đổi chế độ ở trên rồi bấm lại để so sánh.`;
+      $('burstBtn').disabled = false;
+      bursting = false;
+    };
+
     // ---------------------------------------------------------------- đo HR liên tục
     async function probeLoop() {
       while (true) {
-        if (!$('probe').checked) { await ATS.sleep(500); continue; }
+        if (!$('probe').checked || bursting) { await ATS.sleep(500); continue; }
         probeStarted = performance.now();
         const mode = status ? status.bulkheadEnabled : null;
         let code = 0;

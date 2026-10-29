@@ -139,6 +139,45 @@ const ATS = (() => {
     return { done, failed, ms: performance.now() - started };
   }
 
+  // ---------------------------------------------------------------- test ngăn Semaphore
+  const BURST_BODY = JSON.stringify({
+    cvText: 'Backend Developer 4 years experience. Skills: Java, Spring Boot, PostgreSQL, Docker',
+    jobDescription: 'Java, Spring Boot, PostgreSQL, Docker, Kubernetes'
+  });
+
+  /** n HR bấm "Chấm điểm" CÙNG LÚC: gửi n request /match song song, trả về kết quả từng request. */
+  function burstMatch(n) {
+    return Promise.all(Array.from({ length: n }, async (_, index) => {
+      const started = performance.now();
+      try {
+        const res = await api('/api/v1/cvparse/match', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: BURST_BODY
+        });
+        await res.text();
+        return { hr: index + 1, status: res.status, ms: performance.now() - started };
+      } catch {
+        return { hr: index + 1, status: 0, ms: performance.now() - started };
+      }
+    }));
+  }
+
+  /** Vẽ kết quả burstMatch: mỗi HR một ô (xanh = 200, cam = 503 bị Semaphore từ chối). */
+  function renderBurst(el, results) {
+    const ok = results.filter(r => r.status === 200);
+    const busy = results.filter(r => r.status === 503);
+    const range = (list) => list.length ? `${fmtMs(Math.min(...list.map(r => r.ms)))}–${fmtMs(Math.max(...list.map(r => r.ms)))}` : '–';
+    el.innerHTML = `
+      <div class="row" style="margin-bottom:10px">${results.sort((a, b) => a.ms - b.ms).map(r => `
+        <div class="kpi-cell ${r.status === 200 ? 'ok' : r.status === 503 ? 'busy' : 'err'}">
+          <b>HR-${r.hr}</b><span>${r.status === 200 ? '200 · được chấm' : r.status === 503 ? '503 · bị từ chối' : 'lỗi ' + r.status}</span><span>${fmtMs(r.ms)}</span>
+        </div>`).join('')}</div>
+      <div class="notice ${busy.length ? 'warn' : 'ok'}">
+        <b>${ok.length}</b> HR được chấm điểm (${range(ok)}) · <b>${busy.length}</b> HR bị từ chối ngay với 503 "thử lại sau" (${range(busy)}).
+        ${busy.length ? 'Ngăn Semaphore chỉ cho 2 HR chạy cùng lúc, người tới sau chờ tối đa 0,5 giây rồi bị từ chối thay vì treo.' : 'Không ai bị từ chối – bulkhead đang tắt hoặc số HR ≤ 2.'}
+        ${busy.length && ok.length < 2 ? '<br>Chỉ 1 HR được chấm vì permit còn lại đang bị yêu cầu khác giữ (vd. tab HR/Giám sát khác đang mở).' : ''}
+      </div>`;
+  }
+
   // ---------------------------------------------------------------- tiện ích
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   const escapeHtml = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -161,7 +200,7 @@ const ATS = (() => {
 
   return {
     login, logout, currentUser, api, renderTopbar, requireLogin,
-    sampleCandidate, uploadCv, simulateUploads, cvTextFromParsed,
+    sampleCandidate, uploadCv, simulateUploads, cvTextFromParsed, burstMatch, renderBurst,
     sleep, escapeHtml, fmtMs, fmtClock, statusBadge
   };
 })();
