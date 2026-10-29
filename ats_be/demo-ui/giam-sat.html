@@ -75,6 +75,13 @@
       <span class="small muted" id="burstMsg">Ngăn có 2 permit, chờ tối đa 0,5 giây. Tối đa 6 vì trình duyệt chỉ mở ~6 kết nối song song tới 1 máy chủ.</span>
     </div>
     <div id="burstResult" style="margin-top:12px"></div>
+    <h2 style="margin-top:16px"><span class="small">Lịch sử các lần test</span><button class="link small" id="clearBursts">Xoá lịch sử</button></h2>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Lúc</th><th>Bulkhead</th><th>Engine lúc bấm</th><th>Số HR</th><th>Được chấm (200)</th><th>Bị từ chối (503)</th><th>HR chờ lâu nhất</th></tr></thead>
+        <tbody id="bursts"></tbody>
+      </table>
+    </div>
   </section>
 
   <section class="card" style="margin-top:16px">
@@ -195,7 +202,7 @@
     };
 
     function maybeFinishRun() {
-      if (!run || run.uploadMs === null || !counts || !status) return;
+      if (!run || run.uploadMs === null || !counts || !status || bursting) return;   // đợi test HR xong để tính cả vào lượt
       const idle = counts.PENDING === 0 && status.engine.batchRunning === 0;
       if (!idle) return;
       const during = probes.filter(p => p[0] >= run.start);
@@ -229,17 +236,48 @@
 
     // ---------------------------------------------------------------- test ngăn Semaphore
     let bursting = false;     // tạm dừng đo HR liên tục để nó không giữ 1 permit trong lúc test
+    const BURSTS_KEY = 'ats-demo-bursts';
+    const bursts = (() => { try { return JSON.parse(localStorage.getItem(BURSTS_KEY)) || []; } catch { return []; } })();
+    const saveBursts = () => { try { localStorage.setItem(BURSTS_KEY, JSON.stringify(bursts)); } catch { /* bỏ qua */ } };
+
+    function renderBursts() {
+      $('bursts').innerHTML = bursts.map(x => `<tr>
+        <td>${new Date(x.at).toLocaleTimeString('vi-VN')}</td>
+        <td>${x.mode ? '<span class="badge ok">Bật</span>' : '<span class="badge bad">Tắt</span>'}</td>
+        <td class="small">${x.parsing ? `<b>đang parse</b> ${x.parsing} CV` : 'rảnh'}</td>
+        <td>${x.n}</td><td>${x.ok}${x.ok ? ` <span class="small muted">(${ATS.fmtMs(x.okMax)})</span>` : ''}</td>
+        <td>${x.busy}</td><td><b>${ATS.fmtMs(x.max)}</b></td></tr>`).join('')
+        || '<tr><td colspan="7" class="muted">Chưa có lần test nào.</td></tr>';
+    }
+    $('clearBursts').onclick = () => { bursts.length = 0; saveBursts(); renderBursts(); };
+    renderBursts();
+
     $('burstBtn').onclick = async () => {
       if (bursting) return;
       const n = Math.max(1, Math.min(6, parseInt($('burstN').value, 10) || 5));
       bursting = true;
       $('burstBtn').disabled = true;
-      $('burstMsg').innerHTML = '<span class="spinner"></span> Chờ lượt đo HR hiện tại xong…';
-      while (probeStarted !== null) await ATS.sleep(100);
       const mode = status ? status.bulkheadEnabled : null;
+      if (mode) {   // chỉ khi bật: lượt đo đang chạy giữ 1 permit (~2s) -> chờ nó trả permit
+        $('burstMsg').innerHTML = '<span class="spinner"></span> Chờ lượt đo HR hiện tại xong…';
+        while (probeStarted !== null) await ATS.sleep(100);
+      }
+      const e = status ? status.engine : null;
+      const parsing = e ? e.batchRunning + e.batchWaiting : 0;   // số việc parse đang chạy/chờ engine lúc bấm
       $('burstMsg').innerHTML = `<span class="spinner"></span> ${n} HR đang chấm điểm cùng lúc (bulkhead ${mode ? 'BẬT' : 'TẮT'})…`;
       const results = await ATS.burstMatch(n);
       ATS.renderBurst($('burstResult'), results);
+      // Ghi vào biểu đồ + số liệu HR của lượt mô phỏng đang chạy, và vào lịch sử test
+      const now = Date.now();
+      results.forEach((r, i) => probes.push([now - (results.length - 1 - i) * 600, r.ms, r.status, mode]));
+      const okMs = results.filter(r => r.status === 200).map(r => r.ms);
+      bursts.unshift({
+        at: now, mode, n, parsing,
+        ok: okMs.length, okMax: okMs.length ? Math.max(...okMs) : 0,
+        busy: results.filter(r => r.status === 503).length,
+        max: Math.max(...results.map(r => r.ms))
+      });
+      saveBursts(); renderBursts();
       $('burstMsg').textContent = `Lượt vừa rồi: bulkhead ${mode ? 'BẬT' : 'TẮT'}, ${n} HR cùng lúc. Đổi chế độ ở trên rồi bấm lại để so sánh.`;
       $('burstBtn').disabled = false;
       bursting = false;
