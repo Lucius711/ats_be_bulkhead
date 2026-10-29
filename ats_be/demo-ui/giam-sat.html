@@ -10,7 +10,7 @@
 <header id="topbar"></header>
 <main>
   <h1>Giám sát bulkhead – cv-parse-service</h1>
-  <p class="sub">Engine phân tích chỉ chạy được 5 việc cùng lúc. Bulkhead chia ngăn: 3 cho parse CV hàng loạt (ThreadPool, bất đồng bộ), giữ 2 cho HR (Semaphore, đồng bộ).</p>
+  <p class="sub">Máy phân tích CV chỉ phục vụ được 5 việc cùng lúc. Bulkhead không làm máy nhanh hơn – nó chia 5 chỗ đó: parse CV hàng loạt dùng tối đa 3, luôn giữ 2 cho HR chấm điểm.</p>
 
   <section class="card">
     <div class="row" style="justify-content:space-between">
@@ -30,41 +30,45 @@
     </div>
     <div class="progress" style="margin-top:12px"><div id="bar"></div></div>
     <p id="simMsg" class="small muted" style="margin-bottom:0"></p>
+    <p class="small" id="counts" style="margin:6px 0 0"></p>
   </section>
 
-  <div class="grid" style="margin-top:16px">
-    <section class="card">
-      <h2><span>Engine phân tích</span><span class="small muted" id="engineTxt"></span></h2>
-      <div class="slots" id="engine"></div>
-      <p class="small" id="engineWait" style="margin:10px 0 0"></p>
-      <div class="legend"><span><i style="background:var(--batch)"></i>Parse hàng loạt</span><span><i style="background:var(--interactive)"></i>HR chấm điểm</span><span><i style="background:var(--free)"></i>Trống</span></div>
-    </section>
+  <section class="card" style="margin-top:16px">
+    <h2><span>Luồng xử lý lúc này</span><span class="small muted">cập nhật mỗi giây</span></h2>
+    <div class="notice" id="story">Đang tải…</div>
+    <div class="flow">
+      <div class="flow-head">1. Việc đến</div>
+      <div class="flow-head">2. Đi qua ngăn (bulkhead)</div>
+      <div class="flow-head">3. Máy phân tích CV <span class="muted" id="engineTxt"></span></div>
 
-    <section class="card">
-      <h2><span>Ngăn ThreadPool <span class="badge">cvParseBatch</span></span><span class="small muted">bất đồng bộ</span></h2>
-      <div id="batchOn">
-        <div class="small muted">Worker riêng đang parse</div>
-        <div class="slots" id="workers"></div>
-        <div class="small muted" style="margin-top:10px">Hàng đợi của ngăn <b id="queueTxt"></b></div>
-        <div class="slots" id="queue"></div>
+      <div class="flow-cell lane-batch arrow">
+        <b>Ứng viên nộp CV → cần parse</b>
+        <div class="small muted">mỗi CV chiếm 1 chỗ của máy trong <span id="parseCost">8 s</span></div>
+        <div class="small" style="margin-top:8px">CV đang chờ trong RabbitMQ: <b id="rabbitTxt">0</b></div>
+        <div class="slots" id="rabbit"></div>
       </div>
-      <div id="batchOff" hidden>
-        <div class="notice bad">Không có bulkhead: mỗi tin nhắn một thread, không giới hạn.</div>
-        <div class="big" style="margin-top:10px" id="unbounded">0 <small>thread đang parse</small></div>
-      </div>
-      <div class="small muted" style="margin-top:12px">Tin nhắn chờ trong RabbitMQ (ats.cv.parse.q) <b id="rabbitTxt"></b></div>
-      <div class="slots" id="rabbit"></div>
-    </section>
+      <div class="flow-cell lane-batch arrow" id="gateBatch"></div>
 
-    <section class="card">
-      <h2><span>Ngăn Semaphore <span class="badge">cvParseInteractive</span></span><span class="small muted">đồng bộ</span></h2>
-      <div class="small muted">Permit HR đang dùng</div>
-      <div class="slots" id="permits"></div>
-      <p class="small muted" id="semaOn">Đầy quá 0,5 giây → trả 503 "thử lại sau" ngay, không để HR treo.</p>
-      <div class="notice bad small" id="semaOff" hidden style="margin:10px 0">Không có bulkhead: yêu cầu của HR không có ngăn riêng – phải xếp hàng chung với parse hàng loạt ở engine.</div>
-      <div class="kpi" id="counts"></div>
-    </section>
-  </div>
+      <div class="flow-cell engine-cell">
+        <div class="seats" id="engine"></div>
+        <div class="small" style="margin-top:12px">Đứng chờ trước máy (chưa có chỗ):</div>
+        <div class="slots" id="engineQueue"></div>
+        <div class="small" id="engineWait"></div>
+      </div>
+
+      <div class="flow-cell lane-hr arrow">
+        <b>HR bấm "Chấm điểm"</b>
+        <div class="small muted">mỗi lần chiếm 1 chỗ của máy trong <span id="matchCost">2 s</span> – HR đứng chờ trên màn hình</div>
+        <div class="small" style="margin-top:8px" id="hrSrc"></div>
+      </div>
+      <div class="flow-cell lane-hr arrow" id="gateHr"></div>
+    </div>
+    <div class="legend">
+      <span><i style="background:var(--batch)"></i>Parse CV</span><span><i style="background:var(--interactive)"></i>HR chấm điểm</span>
+      <span><i style="background:var(--queue)"></i>Đang chờ trong ngăn</span><span><i style="background:var(--rabbit)"></i>Chờ trong RabbitMQ</span>
+      <span><i style="background:var(--bad)"></i>HR đang bị kẹt</span><span><i style="background:var(--free)"></i>Trống</span>
+    </div>
+  </section>
 
   <section class="card" style="margin-top:16px">
     <h2><span>Test ngăn Semaphore – nhiều HR chấm điểm cùng lúc</span><span class="small muted">POST /api/v1/cvparse/match × N song song</span></h2>
@@ -78,7 +82,7 @@
     <h2 style="margin-top:16px"><span class="small">Lịch sử các lần test</span><button class="link small" id="clearBursts">Xoá lịch sử</button></h2>
     <div class="tablewrap">
       <table>
-        <thead><tr><th>Lúc</th><th>Bulkhead</th><th>Engine lúc bấm</th><th>Số HR</th><th>Được chấm (200)</th><th>Bị từ chối (503)</th><th>HR chờ lâu nhất</th></tr></thead>
+        <thead><tr><th>Lúc</th><th>Bulkhead</th><th>Máy phân tích lúc bấm</th><th>Số HR</th><th>Được chấm (200)</th><th>Bị từ chối (503)</th><th>HR chờ lâu nhất</th></tr></thead>
         <tbody id="bursts"></tbody>
       </table>
     </div>
@@ -134,17 +138,15 @@
         if (!res.ok) throw new Error('HTTP ' + res.status);
         status = await res.json();
         render();
-      } catch (err) { $('engineTxt').textContent = 'không đọc được: ' + err.message; }
+      } catch (err) { $('story').className = 'notice bad'; $('story').textContent = 'Không đọc được trạng thái cv-parse-service: ' + err.message; }
     }
 
     async function loadCounts() {
       try {
         const res = await ATS.api('/api/v1/candidates/cvs?limit=1');
         counts = (await res.json()).counts;
-        $('counts').innerHTML = `
-          <div><b class="warnc">${counts.PENDING}</b><span>CV đang phân tích</span></div>
-          <div><b class="good">${counts.PARSED}</b><span>Đã phân tích</span></div>
-          <div><b class="badc">${counts.FAILED}</b><span>Lỗi</span></div>`;
+        $('counts').innerHTML = `Hồ sơ trong hệ thống: <b class="warnc">${counts.PENDING}</b> CV chưa phân tích xong ·
+          <b class="good">${counts.PARSED}</b> đã phân tích · <b class="badc">${counts.FAILED}</b> lỗi`;
         maybeFinishRun();
       } catch { /* thử lại lần sau */ }
     }
@@ -155,28 +157,77 @@
       // Không cho đổi chế độ giữa một lượt mô phỏng (kết quả lượt đó sẽ bị trộn 2 chế độ)
       $('onBtn').disabled = s.bulkheadEnabled || !s.toggleEnabled || !!run;
       $('offBtn').disabled = !s.bulkheadEnabled || !s.toggleEnabled || !!run;
-      $('semaOn').hidden = !s.bulkheadEnabled;
-      $('semaOff').hidden = s.bulkheadEnabled;
-
-      const used = e.batchRunning + e.interactiveRunning;
-      $('engineTxt').textContent = `${used}/${e.capacity} slot · parse ${e.parseDelayMs / 1000}s · chấm điểm ${e.matchDelayMs / 1000}s`;
-      $('engine').innerHTML = Array.from({ length: e.capacity }, (_, i) =>
-        `<div class="slot ${i < e.batchRunning ? 'batch' : i < used ? 'interactive' : ''}" style="width:46px;height:46px"></div>`).join('');
-      $('engineWait').innerHTML = `Đang xếp hàng chờ engine: <b>${e.batchWaiting}</b> việc parse · <b class="${e.interactiveWaiting ? 'badc' : ''}">${e.interactiveWaiting}</b> yêu cầu của HR`;
-
-      $('batchOn').hidden = !s.bulkheadEnabled;
-      $('batchOff').hidden = s.bulkheadEnabled;
-      const b = s.batchBulkhead;
-      $('workers').innerHTML = slots(b.maxThreads, b.activeThreads, 'batch');
-      $('queue').innerHTML = slots(b.queueCapacity, b.queueDepth, 'queue', 'mini');
-      $('queueTxt').textContent = `${b.queueDepth}/${b.queueCapacity}`;
-      $('unbounded').innerHTML = `${s.unboundedActive} <small>thread đang parse</small>`;
+      const on = s.bulkheadEnabled, b = s.batchBulkhead, i = s.interactiveBulkhead;
+      const parseS = e.parseDelayMs / 1000, matchS = e.matchDelayMs / 1000;
       const ready = Math.max(0, s.rabbitParseQueueReady);
-      $('rabbitTxt').textContent = `${ready}`;
-      $('rabbit').innerHTML = slots(Math.min(ready, 60), Math.min(ready, 60), 'rabbit', 'rabbit');
+      const used = e.batchRunning + e.interactiveRunning;
 
-      const i = s.interactiveBulkhead;
-      $('permits').innerHTML = slots(i.maxConcurrentCalls, i.maxConcurrentCalls - i.availableConcurrentCalls, 'interactive');
+      // 1. Việc đến
+      $('parseCost').textContent = `${parseS} s`; $('matchCost').textContent = `${matchS} s`;
+      $('rabbitTxt').textContent = ready;
+      $('rabbit').innerHTML = slots(Math.min(ready, 40), Math.min(ready, 40), 'rabbit', 'rabbit');
+      const rejected = probes.filter(p => p[0] > Date.now() - 60000 && p[2] === 503).length;
+      $('hrSrc').innerHTML = on ? `Bị báo bận (503) trong 1 phút qua: <b>${rejected}</b>` : 'Không bao giờ bị báo bận – nhưng có thể phải chờ rất lâu';
+
+      // 2. Ngăn
+      $('gateBatch').classList.toggle('gate-off', !on);
+      $('gateBatch').innerHTML = on ? `
+          <b>Ngăn parse</b> <span class="badge">ThreadPool · cvParseBatch</span>
+          <div class="small" style="margin-top:8px">3 thread riêng của ngăn – mỗi thread dẫn 1 CV vào máy: <b>${b.activeThreads}/${b.maxThreads}</b></div>
+          <div class="slots">${slots(b.maxThreads, b.activeThreads, 'batch')}</div>
+          <div class="small" style="margin-top:8px">Ghế chờ trong ngăn: <b>${b.queueDepth}/${b.queueCapacity}</b></div>
+          <div class="slots">${slots(b.queueCapacity, b.queueDepth, 'queue', 'mini')}</div>
+          <div class="small muted" style="margin-top:6px">→ parse không bao giờ chiếm quá 3 chỗ của máy. Ngăn đầy thì CV quay lại RabbitMQ, không mất.</div>`
+        : `
+          <b>Không có ngăn</b>
+          <div class="small" style="margin-top:8px">Mỗi CV một thread, không giới hạn: <b>${s.unboundedActive}</b> thread đang parse</div>
+          <div class="slots">${slots(Math.min(s.unboundedActive, 40), Math.min(s.unboundedActive, 40), 'batch', 'mini')}</div>
+          <div class="small" style="margin-top:6px">→ tất cả lao thẳng vào máy, chiếm được bao nhiêu chỗ thì chiếm.</div>`;
+      $('gateHr').classList.toggle('gate-off', !on);
+      const tickets = i.maxConcurrentCalls - i.availableConcurrentCalls;
+      $('gateHr').innerHTML = on ? `
+          <b>Ngăn HR</b> <span class="badge">Semaphore · cvParseInteractive</span>
+          <div class="small" style="margin-top:8px">2 vé vào máy – HR đang cầm: <b>${tickets}/${i.maxConcurrentCalls}</b></div>
+          <div class="slots">${slots(i.maxConcurrentCalls, tickets, 'interactive')}</div>
+          <div class="small muted" style="margin-top:6px">→ không tạo thread mới, chỉ giới hạn số HR vào máy. Hết vé quá 0,5 s → báo bận (503) ngay, HR không bị treo.</div>`
+        : `
+          <b>Không có ngăn</b>
+          <div class="small" style="margin-top:8px">Yêu cầu của HR đi thẳng vào máy, xếp chung một hàng với parse.</div>`;
+
+      // 3. Máy phân tích: 5 chỗ + hàng chờ trước máy
+      $('engineTxt').textContent = `– ${used}/${e.capacity} chỗ đang dùng`;
+      $('engine').innerHTML = Array.from({ length: e.capacity }, (_, k) => {
+        const who = k < e.batchRunning ? 'batch' : k < used ? 'interactive' : '';
+        const reserved = on && k >= e.capacity - i.maxConcurrentCalls;    // 2 chỗ cuối luôn dành cho HR khi bật
+        return `<div class="seat ${who} ${reserved ? 'reserved' : ''}">${who === 'batch' ? 'Parse' : who ? 'HR' : reserved ? 'giữ cho HR' : 'trống'}</div>`;
+      }).join('');
+      $('engineQueue').innerHTML =
+        slots(Math.min(e.batchWaiting, 40), Math.min(e.batchWaiting, 40), 'batch', 'mini') +
+        slots(e.interactiveWaiting, e.interactiveWaiting, 'stuck', 'mini');
+      $('engineWait').innerHTML = e.batchWaiting + e.interactiveWaiting === 0
+        ? '<span class="muted">không có ai</span>'
+        : `<b>${e.batchWaiting}</b> việc parse · <b class="${e.interactiveWaiting ? 'badc' : ''}">${e.interactiveWaiting}</b> yêu cầu của HR`;
+
+      // Câu giải thích: chuyện gì đang xảy ra
+      const story = $('story');
+      if (on) {
+        story.className = 'notice ok';
+        story.innerHTML = `<b>Bulkhead BẬT.</b> Parse đang dùng ${e.batchRunning}/3 chỗ` +
+          (b.queueDepth + ready ? ` (còn ${b.queueDepth} CV chờ trong ngăn, ${ready} CV chờ trong RabbitMQ)` : '') +
+          `. 2 chỗ còn lại luôn giữ cho HR → HR chấm điểm khoảng ${matchS} s, không bao giờ phải xếp hàng sau parse.`;
+      } else if (e.interactiveWaiting > 0) {
+        const wait = Math.ceil(e.batchWaiting / e.capacity) * parseS + matchS;
+        story.className = 'notice bad';
+        story.innerHTML = `<b>Bulkhead TẮT – HR đang bị kẹt!</b> Parse chiếm ${e.batchRunning}/${e.capacity} chỗ của máy. ` +
+          `${e.interactiveWaiting} yêu cầu của HR đang đứng chờ sau ${e.batchWaiting} việc parse → HR phải chờ khoảng ${wait} s hoặc hơn.`;
+      } else if (e.batchRunning >= e.capacity) {
+        story.className = 'notice warn';
+        story.innerHTML = `<b>Bulkhead TẮT.</b> Parse đang chiếm cả ${e.capacity}/${e.capacity} chỗ, ${e.batchWaiting} việc parse khác đang chờ. ` +
+          `HR bấm chấm điểm lúc này sẽ phải đứng sau tất cả các việc đó.`;
+      } else {
+        story.className = 'notice';
+        story.innerHTML = `<b>Bulkhead TẮT.</b> Không có ngăn – ai đến trước vào máy trước. Bấm "Mô phỏng nộp CV" để thấy parse chiếm hết ${e.capacity} chỗ và HR bị kẹt.`;
+      }
     }
 
     async function setMode(enabled) {
