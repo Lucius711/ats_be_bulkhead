@@ -196,9 +196,13 @@
 
       // 3. Máy phân tích: 5 chỗ + hàng chờ trước máy
       $('engineTxt').textContent = `– ${used}/${e.capacity} chỗ đang dùng`;
+      // Bật: 3 chỗ đầu là khu parse, 2 chỗ cuối là khu giữ cho HR. Tắt: ai đến trước ngồi trước.
+      const hrZone = on ? e.capacity - i.maxConcurrentCalls : 0;
       $('engine').innerHTML = Array.from({ length: e.capacity }, (_, k) => {
-        const who = k < e.batchRunning ? 'batch' : k < used ? 'interactive' : '';
-        const reserved = on && k >= e.capacity - i.maxConcurrentCalls;    // 2 chỗ cuối luôn dành cho HR khi bật
+        const who = on
+          ? (k < hrZone ? (k < e.batchRunning ? 'batch' : '') : (k - hrZone < e.interactiveRunning ? 'interactive' : ''))
+          : (k < e.batchRunning ? 'batch' : k < used ? 'interactive' : '');
+        const reserved = on && k >= hrZone;
         return `<div class="seat ${who} ${reserved ? 'reserved' : ''}">${who === 'batch' ? 'Parse' : who ? 'HR' : reserved ? 'giữ cho HR' : 'trống'}</div>`;
       }).join('');
       $('engineQueue').innerHTML =
