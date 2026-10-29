@@ -161,8 +161,17 @@ const ATS = (() => {
     }));
   }
 
+  /** Số vé Semaphore đang bị giữ ngay lúc này (để biết trước khi test đã có HR khác cầm vé chưa). */
+  async function ticketsHeld() {
+    try {
+      const s = await (await api('/api/v1/cvparse/bulkhead')).json();
+      const i = s.interactiveBulkhead;
+      return { enabled: s.bulkheadEnabled, held: i.maxConcurrentCalls - i.availableConcurrentCalls, max: i.maxConcurrentCalls };
+    } catch { return null; }
+  }
+
   /** Vẽ kết quả burstMatch: mỗi HR một ô (xanh = 200, cam = 503 bị Semaphore từ chối). */
-  function renderBurst(el, results) {
+  function renderBurst(el, results, before = null) {
     const ok = results.filter(r => r.status === 200);
     const busy = results.filter(r => r.status === 503);
     const range = (list) => list.length ? `${fmtMs(Math.min(...list.map(r => r.ms)))}–${fmtMs(Math.max(...list.map(r => r.ms)))}` : '–';
@@ -174,7 +183,9 @@ const ATS = (() => {
       <div class="notice ${busy.length ? 'warn' : 'ok'}">
         <b>${ok.length}</b> HR được chấm điểm (${range(ok)}) · <b>${busy.length}</b> HR bị từ chối ngay với 503 "thử lại sau" (${range(busy)}).
         ${busy.length ? 'Ngăn Semaphore chỉ cho 2 HR chạy cùng lúc, người tới sau chờ tối đa 0,5 giây rồi bị từ chối thay vì treo.' : 'Không ai bị từ chối – bulkhead đang tắt hoặc số HR ≤ 2.'}
-        ${busy.length && ok.length < 2 ? '<br>Chỉ 1 HR được chấm vì permit còn lại đang bị yêu cầu khác giữ (vd. tab HR/Giám sát khác đang mở).' : ''}
+        ${before && before.enabled && before.held > 0
+          ? `<br><b>Lúc bấm đã có ${before.held}/${before.max} vé đang bị HR khác cầm</b> (tab HR/Giám sát khác đang mở, hoặc "Đo liên tục") → lượt này chỉ còn ${before.max - before.held} vé.`
+          : busy.length && ok.length < 2 ? '<br>Ít hơn 2 HR được chấm vì có HR khác (tab khác) lấy vé đúng lúc bấm.' : ''}
       </div>`;
   }
 
@@ -200,7 +211,7 @@ const ATS = (() => {
 
   return {
     login, logout, currentUser, api, renderTopbar, requireLogin,
-    sampleCandidate, uploadCv, simulateUploads, cvTextFromParsed, burstMatch, renderBurst,
+    sampleCandidate, uploadCv, simulateUploads, cvTextFromParsed, burstMatch, renderBurst, ticketsHeld,
     sleep, escapeHtml, fmtMs, fmtClock, statusBadge
   };
 })();

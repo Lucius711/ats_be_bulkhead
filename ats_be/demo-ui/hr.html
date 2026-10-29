@@ -165,10 +165,11 @@
       while (busy) await ATS.sleep(100);
       busy = true; $('scoreBtn').disabled = true;   // không để lần tự chấm giữ mất 1 permit
       $('burstMsg').innerHTML = `<span class="spinner"></span> ${n} HR đang chấm điểm cùng lúc…`;
+      const before = await ATS.ticketsHeld();
       const results = await ATS.burstMatch(n, JSON.stringify({ cvText: ATS.cvTextFromParsed(selected), jobDescription: $('jd').value }));
       const now = Date.now();
       results.forEach((r, i) => history.push([now - (results.length - 1 - i) * 600, r.ms, r.status]));   // dàn cột ra để thấy đủ N cột
-      ATS.renderBurst($('burstResult'), results);
+      ATS.renderBurst($('burstResult'), results, before);
       $('burstMsg').textContent = `Lượt vừa rồi: ${n} HR cùng lúc chấm CV của ${selected.candidateName}.`;
       busy = false; $('scoreBtn').disabled = false; $('burstBtn').disabled = false;
     };

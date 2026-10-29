@@ -320,8 +320,9 @@
       const e = status ? status.engine : null;
       const parsing = e ? e.batchRunning + e.batchWaiting : 0;   // số việc parse đang chạy/chờ engine lúc bấm
       $('burstMsg').innerHTML = `<span class="spinner"></span> ${n} HR đang chấm điểm cùng lúc (bulkhead ${mode ? 'BẬT' : 'TẮT'})…`;
+      const before = await ATS.ticketsHeld();
       const results = await ATS.burstMatch(n);
-      ATS.renderBurst($('burstResult'), results);
+      ATS.renderBurst($('burstResult'), results, before);
       // Ghi vào biểu đồ + số liệu HR của lượt mô phỏng đang chạy, và vào lịch sử test
       const now = Date.now();
       results.forEach((r, i) => probes.push([now - (results.length - 1 - i) * 600, r.ms, r.status, mode]));
