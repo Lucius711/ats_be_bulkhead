@@ -75,9 +75,9 @@
     <h2><span>Test ngăn Semaphore – nhiều HR chấm điểm cùng lúc</span><span class="small muted">POST /api/v1/cvparse/match × N song song</span></h2>
     <div class="row">
       <label for="burstN" style="margin:0">Số HR bấm cùng lúc</label>
-      <input id="burstN" type="number" min="1" max="6" value="5" style="width:80px">
+      <input id="burstN" type="number" min="1" max="15" value="10" style="width:80px">
       <button class="primary" id="burstBtn">Nhiều HR chấm điểm cùng lúc</button>
-      <span class="small muted" id="burstMsg">Ngăn có 2 permit, chờ tối đa 0,5 giây. Tối đa 6 vì trình duyệt chỉ mở ~6 kết nối song song tới 1 máy chủ.</span>
+      <span class="small muted" id="burstMsg">Ngăn có 2 vé, chờ tối đa 0,5 giây. Tối đa 15 HR (trình duyệt chỉ mở ~6 kết nối mỗi tên máy chủ, nên chia qua localhost / 127.0.0.1 / [::1]).</span>
     </div>
     <div id="burstResult" style="margin-top:12px"></div>
     <h2 style="margin-top:16px"><span class="small">Lịch sử các lần test</span><button class="link small" id="clearBursts">Xoá lịch sử</button></h2>
@@ -310,7 +310,7 @@
 
     $('burstBtn').onclick = async () => {
       if (bursting) return;
-      const n = Math.max(1, Math.min(6, parseInt($('burstN').value, 10) || 5));
+      const n = Math.max(1, Math.min(ATS.BURST_MAX, parseInt($('burstN').value, 10) || 10));
       bursting = true;
       $('burstBtn').disabled = true;
       const mode = status ? status.bulkheadEnabled : null;

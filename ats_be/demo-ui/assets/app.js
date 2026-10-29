@@ -52,9 +52,9 @@ const ATS = (() => {
   const logout = () => { try { localStorage.removeItem(STORAGE_KEY); } catch { /* bỏ qua */ } };
   const currentUser = () => readAuth();
 
-  async function api(path, options = {}) {
+  async function api(path, options = {}, base = GATEWAY) {
     const token = await accessToken();
-    return fetch(GATEWAY + path, {
+    return fetch(base + path, {
       ...options,
       headers: { ...(options.headers || {}), Authorization: 'Bearer ' + token }
     });
@@ -145,6 +145,11 @@ const ATS = (() => {
     jobDescription: 'Java, Spring Boot, PostgreSQL, Docker, Kubernetes'
   });
 
+  // Trình duyệt chỉ mở ~6 kết nối tới MỖI tên máy chủ. Ba tên dưới đều là API Gateway trên máy này,
+  // chia request luân phiên qua cả ba -> ~18 kết nối, đủ cho 15 HR bấm thật sự cùng lúc.
+  const BURST_HOSTS = [GATEWAY, 'http://127.0.0.1:8080', 'http://[::1]:8080'];
+  const BURST_MAX = 15;
+
   /** n HR bấm "Chấm điểm" CÙNG LÚC: gửi n request /match song song, trả về kết quả từng request. */
   function burstMatch(n, body = BURST_BODY) {
     return Promise.all(Array.from({ length: n }, async (_, index) => {
@@ -152,7 +157,7 @@ const ATS = (() => {
       try {
         const res = await api('/api/v1/cvparse/match', {
           method: 'POST', headers: { 'Content-Type': 'application/json' }, body
-        });
+        }, BURST_HOSTS[index % BURST_HOSTS.length]);
         await res.text();
         return { hr: index + 1, status: res.status, ms: performance.now() - started };
       } catch {
@@ -211,7 +216,7 @@ const ATS = (() => {
 
   return {
     login, logout, currentUser, api, renderTopbar, requireLogin,
-    sampleCandidate, uploadCv, simulateUploads, cvTextFromParsed, burstMatch, renderBurst, ticketsHeld,
+    sampleCandidate, uploadCv, simulateUploads, cvTextFromParsed, burstMatch, renderBurst, ticketsHeld, BURST_MAX,
     sleep, escapeHtml, fmtMs, fmtClock, statusBadge
   };
 })();

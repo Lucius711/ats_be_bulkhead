@@ -51,7 +51,7 @@
     <h2><span>Test ngăn Semaphore – nhiều HR chấm điểm cùng lúc</span><span class="small muted">2 permit · chờ tối đa 0,5 giây</span></h2>
     <div class="row">
       <label for="burstN" style="margin:0">Số HR bấm cùng lúc</label>
-      <input id="burstN" type="number" min="1" max="6" value="5" style="width:80px">
+      <input id="burstN" type="number" min="1" max="15" value="10" style="width:80px">
       <button class="primary" id="burstBtn">Nhiều HR chấm điểm cùng lúc</button>
       <span class="small muted" id="burstMsg">Gửi N yêu cầu chấm CV đang chọn song song. Bật/tắt bulkhead ở trang Giám sát để so sánh.</span>
     </div>
@@ -159,7 +159,7 @@
     // Nhiều HR bấm cùng lúc -> thấy ngăn Semaphore cho 2 người chạy, số còn lại 503 sau ~0,5s
     $('burstBtn').onclick = async () => {
       if (!selected) return;
-      const n = Math.max(1, Math.min(6, parseInt($('burstN').value, 10) || 5));
+      const n = Math.max(1, Math.min(ATS.BURST_MAX, parseInt($('burstN').value, 10) || 10));
       $('burstBtn').disabled = true;
       $('burstMsg').innerHTML = '<span class="spinner"></span> Chờ lần chấm điểm hiện tại xong…';
       while (busy) await ATS.sleep(100);
