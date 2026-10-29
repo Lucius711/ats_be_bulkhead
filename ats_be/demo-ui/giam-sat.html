@@ -350,6 +350,10 @@
     setProbe((() => { try { return localStorage.getItem(PROBE_KEY) !== '0'; } catch { return true; } })());
     $('probe').onchange = () => setProbe($('probe').checked);
     $('probeTop').onchange = () => setProbe($('probeTop').checked);
+    // Bật/tắt ở 1 tab -> mọi tab Giám sát khác cũng đổi theo (tránh tab bị quên vẫn giữ vé của HR)
+    window.addEventListener('storage', (ev) => {
+      if (ev.key === PROBE_KEY) $('probe').checked = $('probeTop').checked = ev.newValue !== '0';
+    });
 
     async function probeLoop() {
       while (true) {
